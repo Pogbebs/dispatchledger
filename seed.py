@@ -13,6 +13,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from dispatchledger.db import engine
+from dispatchledger.security import hash_password
 from dispatchledger.models import (
     Customer,
     Delivery,
@@ -39,8 +40,10 @@ PRODUCTS = [
     ("DEF", Decimal("2.4500")),
 ]
 
-# A plain placeholder. Real hashing arrives with the auth work in week 2.
-PLACEHOLDER_HASH = "not-a-real-hash"
+# Every demo account shares one password. Hashed once, because bcrypt is
+# deliberately slow and hashing it per user would make seeding crawl.
+DEMO_PASSWORD = "demo1234"
+DEMO_HASH = hash_password(DEMO_PASSWORD)
 
 
 def wipe(session: Session) -> None:
@@ -62,14 +65,14 @@ def seed_tenant(session: Session, name: str, slug: str) -> None:
             email=f"admin@{slug}.example.com",
             full_name=fake.name(),
             role="admin",
-            password_hash=PLACEHOLDER_HASH,
+            password_hash=DEMO_HASH,
         ),
         User(
             tenant_id=tenant.id,
             email=f"dispatch@{slug}.example.com",
             full_name=fake.name(),
             role="dispatcher",
-            password_hash=PLACEHOLDER_HASH,
+            password_hash=DEMO_HASH,
         ),
     ]
     drivers = [
@@ -78,7 +81,7 @@ def seed_tenant(session: Session, name: str, slug: str) -> None:
             email=f"driver{i}@{slug}.example.com",
             full_name=fake.name(),
             role="driver",
-            password_hash=PLACEHOLDER_HASH,
+            password_hash=DEMO_HASH,
         )
         for i in range(1, 5)
     ]
