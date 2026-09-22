@@ -2,7 +2,7 @@
 
 from fastapi import FastAPI
 
-from dispatchledger.routers import auth, customers, deliveries, orders
+from dispatchledger.routers import auth, catalog, customers, deliveries, orders
 
 app = FastAPI(
     title="DispatchLedger",
@@ -18,6 +18,7 @@ app.include_router(auth.router)
 app.include_router(customers.router)
 app.include_router(orders.router)
 app.include_router(deliveries.router)
+app.include_router(catalog.router)
 
 
 @app.get("/health", tags=["ops"])

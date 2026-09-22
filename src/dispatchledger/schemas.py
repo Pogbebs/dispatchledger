@@ -30,6 +30,14 @@ class UserOut(BaseModel):
     role: str
 
 
+class MeOut(UserOut):
+    """Adds the tenant, so the UI can always show which company is in view."""
+
+    tenant_id: uuid.UUID
+    tenant_name: str
+    tenant_slug: str
+
+
 # ---------- customers ----------
 
 class CustomerCreate(BaseModel):
@@ -92,3 +100,38 @@ class DeliveryOut(BaseModel):
     delivered_at: datetime | None
     delivered_gal: Decimal | None
     status: str
+
+
+# ---------- catalog ----------
+
+class ProductOut(BaseModel):
+    model_config = ORM
+    id: uuid.UUID
+    name: str
+    unit: str
+    current_price: Decimal
+
+
+class SiteOut(BaseModel):
+    model_config = ORM
+    id: uuid.UUID
+    customer_id: uuid.UUID
+    address: str
+    tank_capacity_gal: Decimal
+
+
+# ---------- board rows ----------
+# List endpoints return names alongside ids so the UI does not have to fetch
+# every customer and product to render one table.
+
+class OrderRow(OrderOut):
+    customer_name: str
+    product_name: str
+    site_address: str
+
+
+class DeliveryRow(DeliveryOut):
+    customer_name: str
+    product_name: str
+    ordered_gal: Decimal
+    driver_name: str | None = None

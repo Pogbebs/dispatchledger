@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from dispatchledger.db import admin_session
 from dispatchledger.deps import CurrentUser, get_current_user, get_session
 from dispatchledger.models import Tenant, User
-from dispatchledger.schemas import LoginRequest, TokenResponse, UserOut
+from dispatchledger.schemas import LoginRequest, MeOut, TokenResponse
 from dispatchledger.security import create_access_token, verify_password
 
 router = APIRouter(tags=["auth"])
@@ -45,12 +45,22 @@ def login(payload: LoginRequest) -> TokenResponse:
         )
 
 
-@router.get("/me", response_model=UserOut)
+@router.get("/me", response_model=MeOut)
 def me(
     current: CurrentUser = Depends(get_current_user),
     session: Session = Depends(get_session),
-) -> User:
+) -> dict:
+    """Runs on the tenant-scoped session, so the tenant lookup is policy-checked."""
     user = session.get(User, current.id)
-    if user is None:
+    tenant = session.get(Tenant, current.tenant_id)
+    if user is None or tenant is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
-    return user
+    return {
+        "id": user.id,
+        "email": user.email,
+        "full_name": user.full_name,
+        "role": user.role,
+        "tenant_id": tenant.id,
+        "tenant_name": tenant.name,
+        "tenant_slug": tenant.slug,
+    }

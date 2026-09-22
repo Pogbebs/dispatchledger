@@ -200,3 +200,31 @@ def test_pooled_connections_do_not_leak_the_tenant(client, admin_a, admin_b):
         seen_b = {c["id"] for c in client.get("/customers?limit=200", headers=admin_b).json()}
         assert seen_a == baseline_a
         assert seen_b == baseline_b
+
+
+def test_catalog_endpoints_are_tenant_scoped(client, admin_a, admin_b):
+    products_a = client.get("/products", headers=admin_a).json()
+    products_b = client.get("/products", headers=admin_b).json()
+    assert products_a and products_b
+    assert {p["id"] for p in products_a}.isdisjoint({p["id"] for p in products_b})
+
+    sites_a = client.get("/sites", headers=admin_a).json()
+    sites_b = client.get("/sites", headers=admin_b).json()
+    assert {s["id"] for s in sites_a}.isdisjoint({s["id"] for s in sites_b})
+
+
+def test_order_rows_carry_display_names(client, admin_a):
+    rows = client.get("/orders?limit=5", headers=admin_a).json()
+    assert rows
+    for row in rows:
+        assert row["customer_name"]
+        assert row["product_name"]
+        assert row["site_address"]
+
+
+def test_delivery_rows_carry_ordered_quantity(client, admin_a):
+    rows = client.get("/deliveries?limit=5", headers=admin_a).json()
+    assert rows
+    for row in rows:
+        assert row["customer_name"]
+        assert Decimal(row["ordered_gal"]) > 0

@@ -9,23 +9,52 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from dispatchledger.deps import CurrentUser, get_session, require_role
-from dispatchledger.models import Customer, Delivery, Invoice, Order
-from dispatchledger.schemas import DeliveryComplete, DeliveryCreate, DeliveryOut
+from dispatchledger.models import Customer, Delivery, Invoice, Order, Product, User
+from dispatchledger.schemas import (
+    DeliveryComplete,
+    DeliveryCreate,
+    DeliveryOut,
+    DeliveryRow,
+)
 
 router = APIRouter(prefix="/deliveries", tags=["deliveries"])
 
 
-@router.get("", response_model=list[DeliveryOut])
+@router.get("", response_model=list[DeliveryRow])
 def list_deliveries(
     session: Session = Depends(get_session),
     status_filter: str | None = Query(default=None, alias="status"),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
-) -> list[Delivery]:
-    stmt = select(Delivery).order_by(Delivery.scheduled_at.desc())
+) -> list[dict]:
+    """Rows carry the order's customer, product and ordered quantity.
+
+    The ordered quantity matters on this screen: a driver completing a
+    delivery needs to see what was asked for before recording what arrived.
+    """
+    stmt = (
+        select(Delivery, Customer.name, Product.name, Order.quantity_gal, User.full_name)
+        .join(Order, Order.id == Delivery.order_id)
+        .join(Customer, Customer.id == Order.customer_id)
+        .join(Product, Product.id == Order.product_id)
+        .outerjoin(User, User.id == Delivery.driver_id)
+        .order_by(Delivery.scheduled_at.desc())
+    )
     if status_filter:
         stmt = stmt.where(Delivery.status == status_filter)
-    return list(session.scalars(stmt.limit(limit).offset(offset)))
+
+    return [
+        {
+            **{c.name: getattr(delivery, c.name) for c in Delivery.__table__.columns},
+            "customer_name": customer_name,
+            "product_name": product_name,
+            "ordered_gal": ordered_gal,
+            "driver_name": driver_name,
+        }
+        for delivery, customer_name, product_name, ordered_gal, driver_name in (
+            session.execute(stmt.limit(limit).offset(offset))
+        )
+    ]
 
 
 @router.post("", response_model=DeliveryOut, status_code=status.HTTP_201_CREATED)

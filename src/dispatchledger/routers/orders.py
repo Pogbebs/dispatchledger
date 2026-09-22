@@ -7,23 +7,41 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from dispatchledger.deps import CurrentUser, get_session, require_role
-from dispatchledger.models import DeliverySite, Order, Product
-from dispatchledger.schemas import OrderCreate, OrderOut
+from dispatchledger.models import Customer, DeliverySite, Order, Product
+from dispatchledger.schemas import OrderCreate, OrderOut, OrderRow
 
 router = APIRouter(prefix="/orders", tags=["orders"])
 
 
-@router.get("", response_model=list[OrderOut])
+@router.get("", response_model=list[OrderRow])
 def list_orders(
     session: Session = Depends(get_session),
     status_filter: str | None = Query(default=None, alias="status"),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
-) -> list[Order]:
-    stmt = select(Order).order_by(Order.requested_date.desc())
+) -> list[dict]:
+    """Rows carry customer and product names so one table needs one request."""
+    stmt = (
+        select(Order, Customer.name, Product.name, DeliverySite.address)
+        .join(Customer, Customer.id == Order.customer_id)
+        .join(Product, Product.id == Order.product_id)
+        .join(DeliverySite, DeliverySite.id == Order.site_id)
+        .order_by(Order.requested_date.desc())
+    )
     if status_filter:
         stmt = stmt.where(Order.status == status_filter)
-    return list(session.scalars(stmt.limit(limit).offset(offset)))
+
+    return [
+        {
+            **{c.name: getattr(order, c.name) for c in Order.__table__.columns},
+            "customer_name": customer_name,
+            "product_name": product_name,
+            "site_address": site_address,
+        }
+        for order, customer_name, product_name, site_address in session.execute(
+            stmt.limit(limit).offset(offset)
+        )
+    ]
 
 
 @router.get("/{order_id}", response_model=OrderOut)
