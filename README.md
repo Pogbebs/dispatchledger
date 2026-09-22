@@ -49,6 +49,29 @@ Tenant isolation: Gulf Coast Fuel Co. vs Lone Star Bulk Supply
 
 6/6 checks passed.
 ```
+## The API
+
+Tenant scoping happens once, in a request dependency, from the authenticated
+user's token:
+
+```python
+with tenant_session(user.tenant_id) as session:
+    yield session
+```
+
+Handlers then query without any tenant filter at all:
+
+```python
+stmt = select(Customer).order_by(Customer.name)
+return list(session.scalars(stmt))
+```
+
+`tenant_session` sets `app.current_tenant` with `SET LOCAL`, so the setting is
+bound to the transaction and cannot survive on a pooled connection into the
+next request. A test alternates between two tenants thirty times to confirm it.
+
+Demo credentials after seeding: tenant `gulf-coast`, user
+`admin@gulf-coast.example.com`, password `demo1234`.
 
 ## Data model decisions
 
@@ -92,6 +115,12 @@ uv run python seed.py
 
 # 5. Verify tenant isolation
 uv run python check_isolation.py
+
+# 6. Run the test suite
+uv run pytest -q
+
+# 7. Start the API (interactive docs at http://localhost:8000/docs)
+uv run uvicorn dispatchledger.main:app --reload
 ```
 
 Sample data is roughly 24 customers, 440 orders, 411 deliveries and 363 invoices across six months and two tenants, generated with Faker under a fixed seed so runs are reproducible.
@@ -105,11 +134,8 @@ Python 3.14 · PostgreSQL 16 · SQLAlchemy 2.0 · Alembic · Docker · uv
 | | |
 |---|---|
 | Data model, row-level security, seed data, isolation checks | done |
-| REST API — authentication, tenant scoping per request, role-based access | in progress |
-| Web interface — orders board, delivery tracking, invoicing | planned |
-| Analytics pipeline — Airflow and dbt into a tested dimensional model | planned |
-| CI/CD and cloud deployment | planned |
-
+| REST API — auth, per-request tenant scoping, role-based access, 24 tests | done |
+| Web interface — orders board, delivery tracking, invoicing | in progress |
 ---
 
 Built by [Praise Ogbebor](https://github.com/Pogbebs).
