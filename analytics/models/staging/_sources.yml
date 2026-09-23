@@ -1,0 +1,25 @@
+version: 2
+
+sources:
+  - name: app
+    description: >
+      The operational tables the API writes to. Read-only from here: the
+      analytics layer never writes back into the application's schema.
+    database: dispatchledger
+    schema: public
+    tables:
+      - name: tenants
+      - name: users
+      - name: customers
+      - name: delivery_sites
+      - name: products
+      - name: orders
+      - name: deliveries
+      - name: invoices
+        # If no invoice has been written in two days, either trading has
+        # stopped or the pipeline upstream of here is broken. Both are worth
+        # a warning.
+        loaded_at_field: created_at
+        freshness:
+          warn_after: {count: 2, period: day}
+          error_after: {count: 7, period: day}

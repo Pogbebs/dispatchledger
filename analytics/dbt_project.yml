@@ -1,0 +1,26 @@
+name: dispatchledger
+version: "1.0.0"
+config-version: 2
+
+profile: dispatchledger
+
+model-paths: ["models"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+target-path: "target"
+clean-targets: ["target", "dbt_packages"]
+
+models:
+  dispatchledger:
+    staging:
+      # Staging is a thin, cheap rename-and-cast layer, so views avoid
+      # storing a second copy of the application tables.
+      +materialized: view
+      +schema: staging
+    intermediate:
+      +materialized: view
+      +schema: intermediate
+    marts:
+      # Marts are what dashboards and the API read, so they are tables.
+      +materialized: table
+      +schema: marts

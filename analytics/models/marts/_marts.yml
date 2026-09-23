@@ -1,0 +1,124 @@
+version: 2
+
+models:
+  - name: dim_tenant
+    description: One row per distributor company on the platform.
+    columns:
+      - name: tenant_key
+        tests: [unique, not_null]
+      - name: tenant_slug
+        tests: [unique, not_null]
+
+  - name: dim_customer
+    description: Businesses each distributor sells to.
+    columns:
+      - name: customer_key
+        tests: [unique, not_null]
+      - name: tenant_key
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_tenant')
+                field: tenant_key
+      - name: payment_terms_band
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['Net 15 or better', 'Net 30', 'Net 45+']
+
+  - name: dim_product
+    description: Fuel products, per tenant.
+    columns:
+      - name: product_key
+        tests: [unique, not_null]
+      - name: list_price
+        tests: [not_null]
+
+  - name: dim_site
+    description: Tanks at customer locations.
+    columns:
+      - name: site_key
+        tests: [unique, not_null]
+      - name: customer_key
+        tests:
+          - relationships:
+              arguments:
+                to: ref('dim_customer')
+                field: customer_key
+      - name: tank_size_band
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['Small (<= 2k)', 'Medium (2k-5k)', 'Large (5k-10k)', 'Bulk (10k+)']
+
+  - name: dim_driver
+    description: Users with the driver role.
+    columns:
+      - name: driver_key
+        tests: [unique, not_null]
+
+  - name: dim_date
+    description: Date spine built from the range the data actually covers.
+    columns:
+      - name: date_key
+        tests: [unique, not_null]
+
+  - name: fct_deliveries
+    description: >
+      One row per delivery. Carries fill rate and punctuality, both of which
+      exist only because ordered and delivered quantities are stored
+      separately upstream.
+    columns:
+      - name: delivery_key
+        tests: [unique, not_null]
+      - name: order_key
+        tests: [unique, not_null]
+      - name: tenant_key
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_tenant')
+                field: tenant_key
+      - name: customer_key
+        tests:
+          - relationships:
+              arguments:
+                to: ref('dim_customer')
+                field: customer_key
+      - name: product_key
+        tests:
+          - relationships:
+              arguments:
+                to: ref('dim_product')
+                field: product_key
+      - name: delivery_status
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['scheduled', 'in_transit', 'completed', 'failed']
+
+  - name: fct_invoices
+    description: One row per invoice, with receivables ageing.
+    columns:
+      - name: invoice_key
+        tests: [unique, not_null]
+      - name: delivery_key
+        tests:
+          - unique
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fct_deliveries')
+                field: delivery_key
+      - name: invoice_status
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['unpaid', 'paid', 'void']
+      - name: ageing_bucket
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['Settled', 'Current', '1-30 days', '31-60 days', '61-90 days', '90+ days']

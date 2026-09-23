@@ -1,0 +1,16 @@
+# dbt connects as dispatch_analytics, the BYPASSRLS role. Analytics has to
+# read across every tenant, which is exactly what the application role must
+# never do -- so the exception gets its own credential rather than being
+# smuggled in through the app's.
+dispatchledger:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host: "{{ env_var('DBT_HOST', 'localhost') }}"
+      port: "{{ env_var('DBT_PORT', '5433') | int }}"
+      user: "{{ env_var('DBT_USER', 'dispatch_analytics') }}"
+      password: "{{ env_var('DBT_PASSWORD', 'dispatch_analytics') }}"
+      dbname: "{{ env_var('DBT_DBNAME', 'dispatchledger') }}"
+      schema: analytics
+      threads: 4
