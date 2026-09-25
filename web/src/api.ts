@@ -129,6 +129,42 @@ export interface DeliveryRow {
   driver_name: string | null;
 }
 
+/** Warehouse rows, not application rows. Read through the same tenant-scoped
+ *  connection as everything else -- the mart carries its own row-security
+ *  policy so the API never needs the analytics credential. */
+export interface WeeklyPricePosition {
+  week_start: string;
+  delivery_count: number;
+  delivered_gal: string;
+  revenue: string;
+  avg_price: string;
+  market_price: string;
+  price_delta: string;
+  margin_vs_benchmark: string;
+}
+
+export interface InsightsSummary {
+  weeks_covered: number;
+  delivery_count: number;
+  delivered_gal: string;
+  revenue: string;
+  avg_price: string;
+  market_price: string;
+  price_delta: string;
+  margin_vs_benchmark: string;
+  first_week: string;
+  latest_week: string;
+}
+
+export interface Insights {
+  /** False until dbt has built the marts: the app schema and the warehouse
+   *  are created by different tools, so a fresh database has one and not the
+   *  other. */
+  warehouse_available: boolean;
+  weeks: WeeklyPricePosition[];
+  summary: InsightsSummary | null;
+}
+
 // ---------- calls ----------
 
 export const api = {
@@ -165,6 +201,8 @@ export const api = {
     request<DeliveryRow[]>(
       `/deliveries?limit=100${status ? `&status=${status}` : ""}`,
     ),
+
+  insights: (weeks = 26) => request<Insights>(`/insights?weeks=${weeks}`),
 
   completeDelivery: (id: string, delivered_gal: string) =>
     request<DeliveryRow>(`/deliveries/${id}/complete`, {

@@ -23,4 +23,4 @@ RUN python -m venv /opt/dbt_venv \
     && /opt/dbt_venv/bin/dbt --version
 
 # psycopg is for the loader task, which runs in Airflow's own interpreter.
-RUN pip install --no-cache-dir "psycopg[binary]==3.3.6" "requests==2.32.5"
+RUN pip install --no-cache-dir "psycopg[binary]==3.3.6" "requests==2.32.5" 

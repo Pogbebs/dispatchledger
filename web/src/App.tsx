@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import Layout from "./components/Layout";
 import Customers from "./pages/Customers";
 import Deliveries from "./pages/Deliveries";
+import Insights from "./pages/Insights";
 import Login from "./pages/Login";
 import Orders from "./pages/Orders";
 import { AuthProvider, useAuth } from "./auth";
@@ -20,6 +21,7 @@ function Routed() {
         <Route path="/orders" element={<Orders />} />
         <Route path="/deliveries" element={<Deliveries />} />
         <Route path="/customers" element={<Customers />} />
+        <Route path="/insights" element={<Insights />} />
         <Route path="*" element={<Navigate to="/orders" replace />} />
       </Route>
     </Routes>

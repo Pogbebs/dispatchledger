@@ -14,22 +14,27 @@ Built to answer the question that defines multi-tenant SaaS: **how do you guaran
 
 ```mermaid
 flowchart LR
-    U[React app<br/>orders, deliveries] --> A[FastAPI<br/>auth + tenant scoping]
+    U[React app<br/>orders, deliveries, insights] --> A[FastAPI<br/>auth + tenant scoping]
     A --> P[(Postgres<br/>row-level security)]
     E[EIA open data<br/>diesel prices] --> W[Airflow<br/>daily at 06:00]
     W --> P
-    W --> D[dbt<br/>star schema + 69 tests]
+    W --> D[dbt<br/>star schema + 76 tests]
     P --> D
     D --> M[(Marts<br/>facts and dimensions)]
+    M -.->|RLS re-applied<br/>on every rebuild| A
 ```
 
 | Layer | What it does |
 |---|---|
 | **Database** | 8 tables, every schema change an Alembic migration, tenant isolation enforced by RLS policies |
-| **API** | FastAPI with JWT auth, per-request tenant scoping, role-based access, 27 tests |
-| **Web** | React + TypeScript: orders board, delivery completion, customer list |
-| **Warehouse** | dbt star schema — 6 dimensions, 3 facts, 69 data tests |
+| **API** | FastAPI with JWT auth, per-request tenant scoping, role-based access, 35 tests |
+| **Web** | React + TypeScript: orders board, delivery completion, customer list, pricing insights |
+| **Warehouse** | dbt star schema — 6 dimensions, 3 facts, 1 aggregate, 76 data tests |
 | **Pipeline** | Airflow DAG ingesting live EIA fuel prices, rebuilding and testing the warehouse nightly |
+
+The dotted line is the part worth reading the code for: the application reads
+one warehouse table directly, under the same row-level security as everything
+else, without ever holding the analytics credential.
 
 ## The core idea: isolation the application cannot forget
 
@@ -64,14 +69,21 @@ Three details make it hold up:
 Tenant isolation: Gulf Coast Fuel Co. vs Lone Star Bulk Supply
 
   [PASS] unset tenant sees no rows              saw 0 customers with no tenant set
-  [PASS] each tenant sees a slice               Gulf Coast: 12, Lone Star: 12
-  [PASS] slices sum to the full table           12 + 12 == 24
-  [PASS] cross-tenant query returns nothing     returned 0
+  [PASS] each tenant sees a slice               Gulf Coast Fuel Co.: 13, Lone Star Bulk Supply: 12
+  [PASS] slices sum to the full table           13 + 12 == 25
+  [PASS] cross-tenant query returns nothing     asking for Lone Star Bulk Supply's rows while scoped to Gulf Coast Fuel Co. returned 0
   [PASS] orders expose one tenant only          orders visible from 1 tenant(s)
   [PASS] cannot write into another tenant       insert rejected by the row-security policy
+  [PASS] warehouse mart is tenant-scoped        weekly rows visible from 1 tenant(s)
+  [PASS] mart slices sum to the whole           25 + 26 == 51 weekly rows
 
-6/6 checks passed.
+8/8 checks passed.
 ```
+
+The last two are the ones most likely to catch a real regression. Every table
+above them is created once by a migration and keeps its policy forever. The
+mart is dropped and rebuilt by dbt every night, so its policy exists only
+because a post-hook re-creates it.
 
 ## The API
 
@@ -105,7 +117,7 @@ That trade has a cost: with RLS bypassed, nothing at the database level stops a 
 
 Two measures exist only because of a schema decision made on day one. Ordered and delivered quantities are separate columns, so `fct_deliveries` can compute **shortfall** and **fill rate** — the number an operations team actually manages. A system that overwrote ordered with delivered could compute neither.
 
-Five of the 69 tests name a specific failure rather than checking a shape:
+Six of the 76 tests name a specific failure rather than checking a shape:
 
 | Test | What it catches |
 |---|---|
@@ -114,6 +126,45 @@ Five of the 69 tests name a specific failure rather than checking a shape:
 | `assert_no_cross_tenant_rows` | A join crossing the tenant boundary |
 | `assert_benchmark_totals_reconcile` | A model silently filtering rows out of a margin report |
 | `assert_fill_rate_is_plausible` | Impossible deliveries distorting every average downstream |
+| `assert_weekly_position_reconciles` | A rollup drifting from the detail the user can check it against |
+
+## Letting the app read the warehouse
+
+The Insights screen draws one dbt model, `agg_weekly_price_position` — weekly
+realised price against the national benchmark. Getting a warehouse table onto
+an application screen is where the isolation guarantee usually quietly dies,
+because the obvious route is to hand the API the analytics credential.
+
+This does the opposite. The mart carries its own policy, applied as a dbt
+post-hook, and the API reads it as `dispatch_app` exactly like every other
+table:
+
+```sql
+{{ config(post_hook=[
+    "grant usage on schema {{ this.schema }} to dispatch_app",
+    "grant select on {{ this }} to dispatch_app",
+    "alter table {{ this }} enable row level security",
+    "create policy tenant_isolation on {{ this }} using (...)",
+]) }}
+```
+
+The post-hook is not decoration. A table-materialized model is **dropped and
+recreated** on every run, and a policy is a property of the table, not of the
+data in it — so it dies with the old table. Attach it once by hand and
+isolation disappears the first night the pipeline runs, silently, with every
+test still green. That is what the two new checks in `check_isolation.py`
+exist to catch.
+
+`ENABLE` rather than `FORCE` is also deliberate: owners are exempt from their
+own policies unless forced, and dbt's tests run as the owner and need to see
+every tenant to verify the rollup reconciles.
+
+Both price series on that screen are volume-weighted in the warehouse rather
+than averaged per delivery. A 20,000 gallon load and a 200 gallon top-up are
+one row each, so an unweighted average would let the small delivery move the
+weekly figure as much as the large one — and the gap between the two lines,
+which is the entire point of the chart, would be visually persuasive and
+arithmetically meaningless.
 
 ## The pipeline
 
@@ -151,9 +202,9 @@ Non-diesel deliveries are kept with a null market price rather than dropped. Gas
 
 | Suite | Count | What it covers |
 |---|---|---|
-| `check_isolation.py` | 6 | Tenant isolation at the database level, as the app role |
-| `pytest` | 27 | Auth, roles, business rules, cross-tenant 404s, connection-pool leakage |
-| `dbt test` | 69 | Schema constraints, referential integrity, and five named data defects |
+| `check_isolation.py` | 8 | Tenant isolation at the database level, as the app role — including a dbt-rebuilt mart |
+| `pytest` | 35 | Auth, roles, business rules, cross-tenant 404s, connection-pool leakage |
+| `dbt test` | 76 | Schema constraints, referential integrity, and six named data defects |
 
 All three run in CI against a real Postgres, along with a TypeScript build and a DAG import check.
 
@@ -174,6 +225,9 @@ uv sync
 uv run alembic upgrade head
 
 # 4. Load two tenants of six months of trading
+#    Seeds against whatever EIA prices are already loaded, so running the
+#    pipeline first gives demo data priced at a believable spread over the
+#    real market. Without it, fixed list prices are used instead.
 uv run python seed.py
 
 # 5. Verify tenant isolation
@@ -197,7 +251,7 @@ The warehouse:
 ```bash
 cd analytics
 export DBT_PROFILES_DIR=$PWD
-uv run dbt build                         # 19 models, 69 tests
+uv run dbt build                         # 20 models, 76 tests
 ```
 
 The pipeline:
@@ -210,7 +264,9 @@ docker compose up -d --build             # Airflow at http://localhost:8081
 
 Without an EIA key the price fetch skips and everything else still runs. Get one at [eia.gov/opendata](https://www.eia.gov/opendata/register.php).
 
-Sample data is roughly 24 customers, 440 orders, 411 deliveries and 363 invoices across six months and two tenants, generated with Faker under a fixed seed so runs are reproducible.
+Sample data is 25 customers, 42 delivery sites, 444 orders, 413 deliveries and 367 invoices across six months and two tenants, generated with Faker under a fixed seed so runs are reproducible.
+
+Order prices are derived from the EIA series rather than a constant, each order taking the market as it stood on its own requested date plus a per-tenant margin — Gulf Coast around 28¢ a gallon, Lone Star around 37¢. This started as a bug worth keeping in mind: the seed originally hard-coded diesel at $3.84, which was reasonable when written and badly wrong a year later against a market that had nearly doubled. Every test still passed, because every number in the warehouse remained internally consistent. Only comparing against the outside world showed it, which is the one thing a test suite cannot do for you.
 
 ## Stack
 
@@ -223,7 +279,8 @@ Python 3.14 · PostgreSQL 16 · SQLAlchemy 2.0 · Alembic · FastAPI · React 18
 | Data model, row-level security, seed data, isolation checks | done |
 | REST API — auth, per-request tenant scoping, role-based access | done |
 | Web interface — orders board, delivery completion, customers | done |
-| Warehouse — dbt star schema with 69 data tests | done |
+| Insights — warehouse-backed pricing screen, RLS preserved across rebuilds | done |
+| Warehouse — dbt star schema with 76 data tests | done |
 | Pipeline — Airflow, live EIA price ingest, nightly rebuild | done |
 | CI — tests, warehouse, type-check and DAG parse on every push | done |
 | Cloud deployment | planned |

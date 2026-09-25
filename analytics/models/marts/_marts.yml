@@ -123,6 +123,28 @@ models:
               arguments:
                 values: ['Settled', 'Current', '1-30 days', '31-60 days', '61-90 days', '90+ days']
 
+  - name: agg_weekly_price_position
+    description: >
+      One row per tenant per delivery week: volume-weighted realised price
+      against the volume-weighted market price. The only warehouse model the
+      application reads directly, so it carries its own row-security policy.
+    columns:
+      - name: tenant_key
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_tenant')
+                field: tenant_key
+      - name: week_start
+        tests: [not_null]
+      - name: delivered_gal
+        tests: [not_null]
+      - name: avg_price
+        tests: [not_null]
+      - name: market_price
+        tests: [not_null]
+
   - name: fct_price_benchmark
     description: >
       Each completed delivery priced against the national diesel benchmark

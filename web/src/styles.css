@@ -379,3 +379,94 @@ tbody tr:hover {
   .page { padding: 16px; }
   .card { overflow-x: auto; }
 }
+
+/* ---------- insights ---------- */
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.stat {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+
+.stat-label {
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.stat-value {
+  font-family: var(--mono);
+  font-size: 25px;
+  margin: 6px 0 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-note { font-size: 12px; color: var(--muted); }
+
+/* Above the market is the good direction for a seller, below it the bad one.
+   Colour alone never carries the meaning -- every figure keeps its sign. */
+.up { color: var(--ok); }
+.down { color: var(--danger); }
+
+.chart { padding: 8px 4px 4px; }
+.chart svg { width: 100%; height: auto; display: block; }
+
+.chart-grid { stroke: var(--border); stroke-width: 1; }
+.chart-guide { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
+.chart-axis { fill: var(--muted); font-size: 11px; font-family: var(--mono); }
+
+.chart-line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.chart-mine { stroke: var(--accent); }
+/* Dashed as well as dimmer: the two series stay distinguishable in
+   greyscale, and for anyone who cannot separate them by colour. */
+.chart-market { stroke: var(--muted); stroke-dasharray: 5 4; }
+.chart-dot.chart-mine { fill: var(--accent); stroke: var(--surface); stroke-width: 2; }
+.chart-dot.chart-market { fill: var(--muted); stroke: var(--surface); stroke-width: 2; }
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 12px 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.chart-legend .swatch {
+  display: inline-block;
+  width: 14px;
+  height: 3px;
+  margin-right: 6px;
+  vertical-align: middle;
+  border-radius: 2px;
+}
+
+.swatch-mine { background: var(--accent); }
+.swatch-market {
+  background: repeating-linear-gradient(
+    to right, var(--muted) 0 5px, transparent 5px 9px
+  );
+}
+
+.chart-readout {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.footnote { font-size: 12px; margin: 14px 2px 0; max-width: 70ch; }
+
+@media (max-width: 720px) {
+  .chart-readout { margin-left: 0; }
+}

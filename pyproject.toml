@@ -29,3 +29,11 @@ dev = [
     "httpx>=0.28.1",
     "pytest>=9.1.1",
 ]
+
+[tool.pytest.ini_options]
+# Without this, pytest walks the whole repo looking for tests and trips over
+# pipelines/logs/, where Airflow writes a "latest" symlink that Windows
+# refuses to follow (WinError 1920). Naming the test directory is also just
+# faster: there is no reason to scan node_modules or the dbt target folder.
+testpaths = ["tests"]
+norecursedirs = ["pipelines", "analytics", "web", ".venv", "dist", "*.egg-info"]

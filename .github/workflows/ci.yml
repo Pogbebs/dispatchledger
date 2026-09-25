@@ -78,6 +78,20 @@ jobs:
       - name: Seed two tenants
         run: uv run python seed.py
 
+      # The warehouse is built before the isolation check and the API tests,
+      # not after, because both now cover a dbt-built table. The Insights
+      # endpoint reads agg_weekly_price_position, whose row-security policy is
+      # re-applied by a post-hook on every rebuild -- so the check has to run
+      # against a warehouse that has actually been rebuilt.
+      #
+      # The benchmark table is empty here: fetching live prices would need a
+      # secret, and CI should not depend on a third party being up. The models
+      # and their tests still run, and the coverage test is scoped so an empty
+      # feed is not treated as a failure.
+      - name: Build and test the warehouse
+        working-directory: analytics
+        run: uv run dbt build --target prod
+
       # Connects as dispatch_app, the non-superuser role, because testing
       # isolation as the owner would pass while proving nothing.
       - name: Verify tenant isolation at the database level
@@ -88,14 +102,6 @@ jobs:
 
       - name: Run the API test suite
         run: uv run pytest -q
-
-      # The benchmark table is empty here: fetching live prices would need a
-      # secret, and CI should not depend on a third party being up. The models
-      # and their tests still run, and the coverage test is scoped so an empty
-      # feed is not treated as a failure.
-      - name: Build and test the warehouse
-        working-directory: analytics
-        run: uv run dbt build --target prod
 
   frontend:
     name: Web build

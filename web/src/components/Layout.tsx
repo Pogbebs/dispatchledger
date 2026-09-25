@@ -34,6 +34,7 @@ export default function Layout() {
           <NavLink to="/orders">Orders</NavLink>
           <NavLink to="/deliveries">Deliveries</NavLink>
           <NavLink to="/customers">Customers</NavLink>
+          <NavLink to="/insights">Insights</NavLink>
         </nav>
       </header>
 

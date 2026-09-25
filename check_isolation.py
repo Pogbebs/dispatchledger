@@ -16,11 +16,22 @@ APP_URL = os.getenv(
 
 PASS = "PASS"
 FAIL = "FAIL"
+SKIP = "SKIP"
 results: list[tuple[str, str, str]] = []
+
+# The one warehouse model the application reads. dbt drops and recreates it on
+# every run, so its row-security policy is re-applied as a post-hook -- which
+# is exactly the kind of thing that works on the day it is written and
+# silently stops working later. Hence the last two checks.
+MART = "analytics_marts.agg_weekly_price_position"
 
 
 def check(name: str, condition: bool, detail: str) -> None:
     results.append((PASS if condition else FAIL, name, detail))
+
+
+def skip(name: str, detail: str) -> None:
+    results.append((SKIP, name, detail))
 
 
 def set_tenant(cur: psycopg.Cursor, tenant_id: str | None) -> None:
@@ -40,6 +51,15 @@ def main() -> int:
         tenants = cur.fetchall()
         cur.execute("SELECT count(*) FROM customers")
         total_customers = cur.fetchone()[0]
+
+        # Read as the owner, which bypasses row security, so the per-tenant
+        # slices below have a true total to be measured against.
+        cur.execute("SELECT to_regclass(%s) IS NOT NULL", (MART,))
+        mart_built = cur.fetchone()[0]
+        mart_total = None
+        if mart_built:
+            cur.execute(f"SELECT count(*) FROM {MART}")  # noqa: S608 -- constant
+            mart_total = cur.fetchone()[0]
 
     if len(tenants) < 2:
         print("Need at least two tenants. Run seed.py first.")
@@ -115,12 +135,61 @@ def main() -> int:
                 "insert rejected by the row-security policy",
             )
 
+        # 6. The warehouse mart the API reads is isolated too.
+        #
+        # This is the check most likely to catch a real regression. Every
+        # table above is created once by a migration and keeps its policy
+        # forever. The mart is dropped and rebuilt by dbt every night, so its
+        # policy only exists because a post-hook re-creates it. Forget that
+        # hook and this is the only thing standing between one distributor
+        # and another's pricing.
+        #
+        # An empty mart is skipped rather than failed. Without an EIA key
+        # there are no benchmark prices, so the model builds to zero rows --
+        # and "how many tenants can I see" has no meaningful answer over an
+        # empty table. Failing there would mean a green key is required to get
+        # a green build, which is how a check ends up being disabled.
+        if not mart_built:
+            skip(
+                "warehouse mart is tenant-scoped",
+                "run `dbt build` in analytics/ to include this check",
+            )
+            skip("mart slices sum to the whole", "warehouse not built")
+        elif not mart_total:
+            skip("warehouse mart is tenant-scoped", "mart is empty (no EIA prices loaded)")
+            skip("mart slices sum to the whole", "mart is empty")
+        else:
+            set_tenant(cur, str(tenant_a))
+            cur.execute(f"SELECT count(DISTINCT tenant_key) FROM {MART}")  # noqa: S608
+            mart_tenants = cur.fetchone()[0]
+            cur.execute(f"SELECT count(*) FROM {MART}")  # noqa: S608
+            mart_a = cur.fetchone()[0]
+
+            set_tenant(cur, str(tenant_b))
+            cur.execute(f"SELECT count(*) FROM {MART}")  # noqa: S608
+            mart_b = cur.fetchone()[0]
+
+            check(
+                "warehouse mart is tenant-scoped",
+                mart_tenants == 1,
+                f"weekly rows visible from {mart_tenants} tenant(s)",
+            )
+            check(
+                "mart slices sum to the whole",
+                mart_a + mart_b == mart_total,
+                f"{mart_a} + {mart_b} == {mart_total} weekly rows",
+            )
+
     print(f"\nTenant isolation: {name_a} vs {name_b}\n")
     for status, name, detail in results:
         print(f"  [{status}] {name:<38} {detail}")
 
     failures = sum(1 for status, _, _ in results if status == FAIL)
-    print(f"\n{len(results) - failures}/{len(results)} checks passed.")
+    skipped = sum(1 for status, _, _ in results if status == SKIP)
+    ran = len(results) - skipped
+
+    tail = f" ({skipped} skipped: warehouse not built)" if skipped else ""
+    print(f"\n{ran - failures}/{ran} checks passed{tail}.")
     return 1 if failures else 0
 
 

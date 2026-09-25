@@ -135,3 +135,46 @@ class DeliveryRow(DeliveryOut):
     product_name: str
     ordered_gal: Decimal
     driver_name: str | None = None
+
+
+# ---------- insights ----------
+# These come from the warehouse rather than the application tables, so there
+# is no ORM model behind them: the rows are read as plain SQL and validated
+# here on the way out.
+
+class WeeklyPricePosition(BaseModel):
+    week_start: date
+    delivery_count: int
+    delivered_gal: Decimal
+    revenue: Decimal
+    avg_price: Decimal
+    market_price: Decimal
+    price_delta: Decimal
+    margin_vs_benchmark: Decimal
+
+
+class InsightsSummary(BaseModel):
+    weeks_covered: int
+    delivery_count: int
+    delivered_gal: Decimal
+    revenue: Decimal
+    avg_price: Decimal
+    market_price: Decimal
+    price_delta: Decimal
+    margin_vs_benchmark: Decimal
+    first_week: date
+    latest_week: date
+
+
+class InsightsOut(BaseModel):
+    """``warehouse_available`` is false before the first dbt build.
+
+    The API and the warehouse are built by different tools on different
+    schedules, so a freshly migrated database has application tables and no
+    marts. Saying so plainly lets the UI explain the gap instead of showing
+    an error it cannot account for.
+    """
+
+    warehouse_available: bool
+    weeks: list[WeeklyPricePosition]
+    summary: InsightsSummary | None
