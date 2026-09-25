@@ -23,3 +23,17 @@ sources:
         freshness:
           warn_after: {count: 2, period: day}
           error_after: {count: 7, period: day}
+
+  - name: external
+    description: Reference data loaded by the Airflow pipeline, not by the app.
+    database: dispatchledger
+    schema: public
+    tables:
+      - name: raw_fuel_prices
+        description: Weekly US No 2 diesel retail price from the EIA open data API.
+        loaded_at_field: loaded_at
+        freshness:
+          # The series is weekly, so ten days without a load means the
+          # pipeline has stopped rather than the market being quiet.
+          warn_after: {count: 10, period: day}
+          error_after: {count: 21, period: day}

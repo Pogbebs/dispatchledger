@@ -14,3 +14,14 @@ dispatchledger:
       dbname: "{{ env_var('DBT_DBNAME', 'dispatchledger') }}"
       schema: analytics
       threads: 4
+    # Used by the Airflow DAG. Same warehouse, but every value comes from
+    # the environment, so no credential is written into the repo.
+    prod:
+      type: postgres
+      host: "{{ env_var('DBT_HOST') }}"
+      port: "{{ env_var('DBT_PORT') | int }}"
+      user: "{{ env_var('DBT_USER') }}"
+      password: "{{ env_var('DBT_PASSWORD') }}"
+      dbname: "{{ env_var('DBT_DBNAME') }}"
+      schema: analytics
+      threads: 4

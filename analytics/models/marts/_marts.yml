@@ -122,3 +122,22 @@ models:
           - accepted_values:
               arguments:
                 values: ['Settled', 'Current', '1-30 days', '31-60 days', '61-90 days', '90+ days']
+
+  - name: fct_price_benchmark
+    description: >
+      Each completed delivery priced against the national diesel benchmark
+      published the same week or earlier. Answers whether a tenant is
+      charging above or below the market.
+    columns:
+      - name: delivery_key
+        tests: [unique, not_null]
+      - name: product_name
+        tests: [not_null]
+      - name: is_benchmarked
+        tests: [not_null]
+      - name: tenant_key
+        tests:
+          - relationships:
+              arguments:
+                to: ref('dim_tenant')
+                field: tenant_key
