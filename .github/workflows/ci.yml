@@ -1,0 +1,157 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    name: API, warehouse and isolation
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: dispatch
+          POSTGRES_PASSWORD: dispatch
+          POSTGRES_DB: dispatchledger
+        ports:
+          # Mapped to 5433 so every default in the project works unchanged:
+          # alembic.ini, config.py and profiles.yml all expect that port
+          # locally. CI running on a different port than development is a
+          # classic source of "works on my machine".
+          - 5433:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql+psycopg://dispatch:dispatch@localhost:5433/dispatchledger
+      APP_DATABASE_URL: postgresql+psycopg://dispatch_app:dispatch_app@localhost:5433/dispatchledger
+      JWT_SECRET: ci-only-secret-never-used-outside-this-runner
+      DBT_HOST: localhost
+      DBT_PORT: "5433"
+      DBT_USER: dispatch_analytics
+      DBT_PASSWORD: dispatch_analytics
+      DBT_DBNAME: dispatchledger
+      DBT_PROFILES_DIR: ${{ github.workspace }}/analytics
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      # Running migrations against an empty database is the check that caught
+      # nothing during development: a migration whose body was never filled in
+      # applies silently and successfully. Here, the steps that follow fail if
+      # the schema is not actually there.
+      - name: Apply migrations
+        run: uv run alembic upgrade head
+
+      - name: Confirm the schema exists
+        run: |
+          uv run python - <<'PY'
+          from sqlalchemy import create_engine, inspect
+          import os
+
+          expected = {
+              "tenants", "users", "customers", "delivery_sites", "products",
+              "orders", "deliveries", "invoices", "raw_fuel_prices",
+          }
+          engine = create_engine(os.environ["DATABASE_URL"])
+          actual = set(inspect(engine).get_table_names())
+          missing = expected - actual
+          assert not missing, f"migrations left these tables missing: {sorted(missing)}"
+          print(f"all {len(expected)} expected tables present")
+          PY
+
+      - name: Seed two tenants
+        run: uv run python seed.py
+
+      # Connects as dispatch_app, the non-superuser role, because testing
+      # isolation as the owner would pass while proving nothing.
+      - name: Verify tenant isolation at the database level
+        env:
+          APP_DATABASE_URL: postgresql://dispatch_app:dispatch_app@localhost:5433/dispatchledger
+          DATABASE_URL_RAW: postgresql://dispatch:dispatch@localhost:5433/dispatchledger
+        run: uv run python check_isolation.py
+
+      - name: Run the API test suite
+        run: uv run pytest -q
+
+      # The benchmark table is empty here: fetching live prices would need a
+      # secret, and CI should not depend on a third party being up. The models
+      # and their tests still run, and the coverage test is scoped so an empty
+      # feed is not treated as a failure.
+      - name: Build and test the warehouse
+        working-directory: analytics
+        run: uv run dbt build --target prod
+
+  frontend:
+    name: Web build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        working-directory: web
+        run: npm ci
+
+      # tsc runs as part of the build, so this fails on a type error as well
+      # as on a broken bundle.
+      - name: Type-check and build
+        working-directory: web
+        run: npm run build
+
+  pipeline:
+    name: DAG imports cleanly
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # Airflow is installed on its own here rather than through the project's
+      # dependencies: it pins versions that conflict with dbt, which is the
+      # same reason the Docker image keeps dbt in a separate virtualenv.
+      - name: Install Airflow
+        run: |
+          pip install "apache-airflow==3.1.3" requests \
+            --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-3.1.3/constraints-3.11.txt"
+
+      # A DAG that fails to import does not show up in Airflow at all, and
+      # nothing else in this repository would notice.
+      - name: Parse the DAG
+        env:
+          AIRFLOW_HOME: ${{ runner.temp }}/airflow
+        run: |
+          python - <<'PY'
+          from airflow.models import DagBag
+
+          bag = DagBag("pipelines/dags", include_examples=False)
+          assert not bag.import_errors, bag.import_errors
+
+          dag = bag.dags["dispatchledger_daily"]
+          assert len(dag.tasks) == 4, f"expected 4 tasks, found {len(dag.tasks)}"
+          print(f"{dag.dag_id} parsed cleanly with {len(dag.tasks)} tasks")
+          PY
