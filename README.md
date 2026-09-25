@@ -197,7 +197,7 @@ The warehouse:
 ```bash
 cd analytics
 export DBT_PROFILES_DIR=$PWD
-uv run dbt build                         # 18 models, 69 tests
+uv run dbt build                         # 19 models, 69 tests
 ```
 
 The pipeline:
