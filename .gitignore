@@ -8,3 +8,7 @@ dist/
 analytics/target/
 analytics/logs/
 analytics/dbt_packages/
+
+pipelines/logs/
+
+pipelines/logs/
