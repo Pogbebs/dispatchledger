@@ -213,7 +213,7 @@ Non-diesel deliveries are kept with a null market price rather than dropped. Gas
 | Suite | Count | What it covers |
 |---|---|---|
 | `check_isolation.py` | 8 | Tenant isolation at the database level, as the app role — including a dbt-rebuilt mart |
-| `pytest` | 35 | Auth, roles, business rules, cross-tenant 404s, connection-pool leakage |
+| `pytest` | 38 | Auth, roles, business rules, cross-tenant 404s, connection-pool leakage, health |
 | `dbt test` | 76 | Schema constraints, referential integrity, and six named data defects |
 
 All three run in CI against a real Postgres, along with a TypeScript build and a DAG import check.
@@ -228,8 +228,9 @@ docker run --name dispatch-db \
   -e POSTGRES_USER=dispatch -e POSTGRES_PASSWORD=dispatch -e POSTGRES_DB=dispatchledger \
   -p 5433:5432 -d postgres:16
 
-# 2. Install dependencies
+# 2. Install dependencies and settings
 uv sync
+cp .env.example .env                     # JWT_SECRET has no default, by design
 
 # 3. Build the schema, roles and row-level security policies
 uv run alembic upgrade head
@@ -277,6 +278,34 @@ Without an EIA key the price fetch skips and everything else still runs. Get one
 Sample data is 25 customers, 42 delivery sites, 444 orders, 413 deliveries and 367 invoices across six months and two tenants, generated with Faker under a fixed seed so runs are reproducible.
 
 Order prices are derived from the EIA series rather than a constant, each order taking the market as it stood on its own requested date plus a per-tenant margin — Gulf Coast around 28¢ a gallon, Lone Star around 37¢. This started as a bug worth keeping in mind: the seed originally hard-coded diesel at $3.84, which was reasonable when written and badly wrong a year later against a market that had nearly doubled. Every test still passed, because every number in the warehouse remained internally consistent. Only comparing against the outside world showed it, which is the one thing a test suite cannot do for you.
+
+## Configuration
+
+Nothing in this repository is a working credential. Three settings have no
+usable default, and the code refuses to start rather than substituting one.
+
+| Variable | Required | What it is |
+|---|---|---|
+| `JWT_SECRET` | always | Signs the tokens that carry tenant identity |
+| `DATABASE_URL` | deployment | Owner role — migrations, seeding, login |
+| `APP_DATABASE_URL` | deployment | `dispatch_app`, the role RLS applies to |
+| `APP_DB_PASSWORD` | deployment | Password the migrations set on `dispatch_app` |
+| `ANALYTICS_DB_PASSWORD` | deployment | Password for `dispatch_analytics` |
+| `EIA_API_KEY` | optional | Without it the price fetch skips and everything else runs |
+
+`JWT_SECRET` is the one that matters most, and the reason it has no fallback
+is worth stating plainly: the tenant travels inside the signed token, so
+anyone who knows the signing key can mint a token for any tenant and read that
+company's data. A default that works would hand that to whoever reads this
+repository — silently, on a deployment that looked perfectly healthy.
+
+`ANALYTICS_DB_PASSWORD` is the second: that role carries `BYPASSRLS`, so every
+policy protecting every other role is void for it.
+
+The same reasoning runs through the rest of the project. An unset tenant
+returns zero rows rather than every row; an absent EIA key raises rather than
+inventing a price. A default that works is more dangerous than one that does
+not, because nothing tells you it is wrong.
 
 ## Stack
 

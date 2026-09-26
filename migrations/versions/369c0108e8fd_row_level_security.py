@@ -5,6 +5,7 @@ Revises: f669781c19e5
 Create Date: 2026-09-22 10:44:13.075249
 
 """
+import os
 from typing import Sequence, Union
 
 from alembic import op
@@ -32,16 +33,40 @@ TENANT_PREDICATE = (
 )
 
 
+def role_password(env_var: str, dev_default: str) -> str:
+    """A role's password as a quoted SQL literal.
+
+    Defined here rather than imported from the application package on purpose.
+    A migration has to keep producing the same schema years after it was
+    written; importing a module that has since been refactored is how a
+    migration quietly stops meaning what it meant when it ran. Six duplicated
+    lines are cheaper than that coupling.
+
+    Role DDL cannot take bind parameters, so the value is escaped by hand.
+    """
+    value = os.environ.get(env_var) or dev_default
+    return "'" + value.replace("'", "''") + "'"
+
+
 def upgrade() -> None:
     # An application login role. Deliberately not a superuser and not the table
     # owner, because Postgres lets superusers bypass row-level security
     # entirely -- the API connects as this role so the policies actually apply.
+    #
+    # The literal fallback keeps `alembic upgrade head` a one-command local
+    # setup. Anywhere the database is reachable from the internet, APP_DB_PASSWORD
+    # must be set: a password committed to a public repository is not a password.
+    # The ELSE branch means re-running migrations rotates it rather than
+    # silently leaving the old one in place.
+    password = role_password("APP_DB_PASSWORD", "dispatch_app")
     op.execute(
-        """
+        f"""
         DO $$
         BEGIN
             IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'dispatch_app') THEN
-                CREATE ROLE dispatch_app LOGIN PASSWORD 'dispatch_app';
+                CREATE ROLE dispatch_app LOGIN PASSWORD {password};
+            ELSE
+                ALTER ROLE dispatch_app LOGIN PASSWORD {password};
             END IF;
         END
         $$;
