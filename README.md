@@ -107,6 +107,16 @@ The tenant travels in the signed token, so there is no tenant parameter anywhere
 
 Interactive docs at `/docs`. Demo credentials after seeding: tenant `gulf-coast`, user `admin@gulf-coast.example.com`, password `demo1234`. Sign in as `driver1@` instead to see the same screens with fewer permissions.
 
+### The screens
+
+Completing a delivery records what actually arrived, then invoices for that amount rather than for what was ordered. Trucks routinely deliver short, so the two quantities are stored separately — and the gap between them is where fill rate comes from.
+
+![Deliveries board](docs/Deliveries-board.png)
+
+Customers carry the payment terms that set each invoice's due date, which is what drives the receivables ageing in the warehouse.
+
+![Customers](docs/customer-board.png)
+
 ## The warehouse
 
 dbt models the operational tables into a star schema, read by a third role:
