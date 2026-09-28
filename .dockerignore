@@ -1,0 +1,32 @@
+# Everything here would be copied into the build context and then either
+# ignored or actively harmful. Excluding it makes builds faster and, in the
+# case of .env, keeps a signing key out of a container image.
+
+.env
+*.env
+!.env.example
+
+.git
+.github
+.venv
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Rebuilt inside the image by the node stage. Copying a local build in would
+# let a stale dist -- or one built against a different API -- ship silently.
+web/dist/
+web/node_modules/
+
+# dbt runs in CI, not in this image.
+analytics/target/
+analytics/logs/
+analytics/dbt_packages/
+
+# Airflow runs locally only; its logs are large and contain no useful history.
+pipelines/logs/
+
+docs/
+*.md
+!README.md
