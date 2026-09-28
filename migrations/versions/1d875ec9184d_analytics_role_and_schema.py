@@ -53,7 +53,21 @@ def upgrade() -> None:
         """
     )
 
-    op.execute("CREATE SCHEMA IF NOT EXISTS analytics AUTHORIZATION dispatch_analytics")
+    # Created by the migration's own role, then granted -- rather than
+    # CREATE SCHEMA ... AUTHORIZATION dispatch_analytics.
+    #
+    # Creating a schema owned by another role requires being able to SET ROLE
+    # to it. A local superuser can; the owner role on a managed provider
+    # cannot, because it created dispatch_analytics through CREATEROLE rather
+    # than being a superuser. The AUTHORIZATION form therefore works on a
+    # laptop and fails on Neon with "must be able to SET ROLE".
+    #
+    # Ownership was never the requirement. dbt needs to create objects here,
+    # which CREATE and USAGE grant directly, and it creates its own schemas
+    # (analytics_staging, analytics_marts) under the CREATE ON DATABASE grant
+    # below -- owning those, since it makes them.
+    op.execute("CREATE SCHEMA IF NOT EXISTS analytics")
+    op.execute("GRANT CREATE, USAGE ON SCHEMA analytics TO dispatch_analytics")
 
     # dbt creates its own schemas (analytics_staging, analytics_marts, ...),
     # which needs CREATE on the database itself.

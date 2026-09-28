@@ -5,7 +5,12 @@ sources:
     description: >
       The operational tables the API writes to. Read-only from here: the
       analytics layer never writes back into the application's schema.
-    database: dispatchledger
+    # Whichever database dbt is connected to. Naming it outright pinned the
+    # project to a database called "dispatchledger", which is the local one --
+    # a managed provider names the database for you, and Postgres cannot join
+    # across databases, so every staging model failed at once with
+    # "cross-database references are not implemented".
+    database: "{{ target.database }}"
     schema: public
     tables:
       - name: tenants
@@ -26,7 +31,12 @@ sources:
 
   - name: external
     description: Reference data loaded by the Airflow pipeline, not by the app.
-    database: dispatchledger
+    # Whichever database dbt is connected to. Naming it outright pinned the
+    # project to a database called "dispatchledger", which is the local one --
+    # a managed provider names the database for you, and Postgres cannot join
+    # across databases, so every staging model failed at once with
+    # "cross-database references are not implemented".
+    database: "{{ target.database }}"
     schema: public
     tables:
       - name: raw_fuel_prices

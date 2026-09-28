@@ -1,3 +1,4 @@
+import os
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config
@@ -16,15 +17,36 @@ if config.config_file_name is not None:
 
 # add your model's MetaData object here
 # for 'autogenerate' support
-# from myapp import mymodel
-# target_metadata = mymodel.Base.metadata
 from dispatchledger.models import Base
 target_metadata = Base.metadata
 
-# other values from the config, defined by the needs of env.py,
-# can be acquired:
-# my_important_option = config.get_main_option("my_important_option")
-# ... etc.
+
+# --- where to connect -------------------------------------------------------
+#
+# alembic.ini carries a local development URL, which is convenient and is also
+# the only database this project could migrate until this block existed: the
+# ini value is committed, so `alembic upgrade head` always went to localhost no
+# matter what the environment said.
+#
+# The failure was quiet, which is what made it worth fixing properly. Pointed
+# at a fresh managed database, Alembic read the local one instead, found it
+# already at head, printed nothing and exited 0. A successful-looking run that
+# created nothing.
+#
+# DATABASE_URL now wins when it is set, and the ini remains the local default.
+#
+# The %-escaping is not decoration: alembic.ini is a ConfigParser file, so
+# set_main_option runs %-interpolation over the value. A password containing a
+# literal % -- which managed providers do generate -- would otherwise raise an
+# interpolation error, or worse, silently mangle the credential.
+def _configured_url() -> str | None:
+    url = os.environ.get("DATABASE_URL")
+    return url.replace("%", "%%") if url else None
+
+
+_url = _configured_url()
+if _url:
+    config.set_main_option("sqlalchemy.url", _url)
 
 
 def run_migrations_offline() -> None:
@@ -65,6 +87,13 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
+        # Say out loud which host is about to be migrated. A migration run is
+        # one of the few operations that cannot be undone by re-running it,
+        # and "I thought it was pointed somewhere else" is the way that goes
+        # wrong. The password is stripped -- this line ends up in CI logs.
+        url = connectable.url
+        print(f"alembic: migrating {url.host or 'local'}/{url.database} as {url.username}")
+
         context.configure(
             connection=connection, target_metadata=target_metadata
         )
