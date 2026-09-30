@@ -153,7 +153,7 @@ export default function Invoices() {
                     )}
                   </td>
                   {canEdit && (
-                    <td>
+                    <td className="cell-actions">
                       {row.status === "unpaid" && (
                         <button
                           className="btn btn-quiet btn-sm"

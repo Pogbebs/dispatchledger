@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+} from "react";
 import {
   ApiError,
   api,
@@ -148,7 +155,8 @@ export default function Orders() {
           </thead>
           <tbody>
             {rows.map((row) => (
-              <tr key={row.id}>
+              <Fragment key={row.id}>
+              <tr>
                 <td className="num">{day(row.requested_date)}</td>
                 <td>{row.customer_name}</td>
                 <td className="truncate subtle">{row.site_address}</td>
@@ -164,13 +172,49 @@ export default function Orders() {
                   <Pill status={row.status} />
                 </td>
                 {canEdit && (
-                  <td>
-                    {scheduling === row.id ? (
-                      <span className="inline-form">
+                  <td className="cell-actions">
+                    <span className="inline-form">
+                      {row.status === "pending" && (
+                        <button
+                          className="btn btn-sm"
+                          onClick={() =>
+                            setScheduling(scheduling === row.id ? null : row.id)
+                          }
+                        >
+                          Schedule
+                        </button>
+                      )}
+                      {row.status !== "delivered" &&
+                        row.status !== "cancelled" && (
+                          <button
+                            className="btn btn-quiet btn-sm"
+                            onClick={() => cancel(row.id)}
+                          >
+                            Cancel
+                          </button>
+                        )}
+                    </span>
+                  </td>
+                )}
+              </tr>
+
+              {/* The scheduling controls are a select, a date and two buttons.
+                  Put in the actions cell they widen the whole table and push
+                  the buttons off the right edge, so they get a row of their
+                  own directly beneath the order they belong to. */}
+              {canEdit && scheduling === row.id && (
+                <tr className="sched-row">
+                  <td colSpan={9}>
+                    <div className="sched-form">
+                      <span className="sched-label">
+                        Schedule {gallons(row.quantity_gal)} gal of{" "}
+                        {row.product_name} for {row.customer_name}
+                      </span>
+                      <label>
+                        Driver
                         <select
                           value={driverId}
                           onChange={(e) => setDriverId(e.target.value)}
-                          aria-label="Driver"
                         >
                           <option value="">Unassigned</option>
                           {drivers.map((d) => (
@@ -179,50 +223,33 @@ export default function Orders() {
                             </option>
                           ))}
                         </select>
+                      </label>
+                      <label>
+                        Date
                         <input
                           type="date"
                           value={schedDate}
                           onChange={(e) => setSchedDate(e.target.value)}
-                          aria-label="Delivery date"
                         />
-                        <button
-                          className="btn btn-sm"
-                          disabled={busy}
-                          onClick={() => schedule(row.id)}
-                        >
-                          {busy ? "…" : "Confirm"}
-                        </button>
-                        <button
-                          className="btn btn-quiet btn-sm"
-                          onClick={() => setScheduling(null)}
-                        >
-                          Cancel
-                        </button>
-                      </span>
-                    ) : (
-                      <span className="inline-form">
-                        {row.status === "pending" && (
-                          <button
-                            className="btn btn-sm"
-                            onClick={() => setScheduling(row.id)}
-                          >
-                            Schedule
-                          </button>
-                        )}
-                        {row.status !== "delivered" &&
-                          row.status !== "cancelled" && (
-                            <button
-                              className="btn btn-quiet btn-sm"
-                              onClick={() => cancel(row.id)}
-                            >
-                              Cancel
-                            </button>
-                          )}
-                      </span>
-                    )}
+                      </label>
+                      <button
+                        className="btn btn-sm"
+                        disabled={busy}
+                        onClick={() => schedule(row.id)}
+                      >
+                        {busy ? "…" : "Confirm"}
+                      </button>
+                      <button
+                        className="btn btn-quiet btn-sm"
+                        onClick={() => setScheduling(null)}
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   </td>
-                )}
-              </tr>
+                </tr>
+              )}
+              </Fragment>
             ))}
           </tbody>
         </table>

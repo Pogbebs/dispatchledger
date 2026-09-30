@@ -149,7 +149,7 @@ export default function Deliveries() {
                 <td>
                   <Pill status={row.status} />
                 </td>
-                <td>
+                <td className="cell-actions">
                   {editing === row.id ? (
                     <span className="inline-form">
                       <select

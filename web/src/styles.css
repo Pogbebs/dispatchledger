@@ -120,7 +120,7 @@ body {
 }
 
 .page {
-  max-width: 1180px;
+  max-width: 1320px;
   margin: 0 auto;
   padding: 24px 24px 64px;
 }
@@ -224,7 +224,10 @@ label {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  overflow: hidden;
+  /* auto, never hidden. A table that outgrows the card should offer a
+     scrollbar; hidden silently amputates the last column instead, which is
+     exactly how the Cancel button disappeared when Schedule was added. */
+  overflow-x: auto;
 }
 
 table {
@@ -266,7 +269,7 @@ tbody tr:hover {
 }
 
 .truncate {
-  max-width: 260px;
+  max-width: 220px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -377,7 +380,6 @@ tbody tr:hover {
 @media (max-width: 720px) {
   .header-top { flex-wrap: wrap; }
   .page { padding: 16px; }
-  .card { overflow-x: auto; }
 }
 
 /* ---------- insights ---------- */
@@ -494,4 +496,52 @@ tbody tr:hover {
 
 @media (max-width: 900px) {
   .inline-form { flex-wrap: wrap; }
+}
+
+/* The actions column: as narrow as its buttons, and never wrapped onto a
+   second line. width:1% is the table idiom for "shrink to fit" -- the layout
+   algorithm gives a percentage this small the minimum the content allows. */
+.cell-actions {
+  width: 1%;
+  white-space: nowrap;
+  text-align: right;
+}
+
+/* ---------- the scheduling row ---------- */
+/* Its own row beneath the order, so opening the form never changes the width
+   of any column above it. */
+
+.sched-row td {
+  background: var(--surface-2);
+  padding: 12px 14px;
+}
+
+.sched-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.sched-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+.sched-form select,
+.sched-form input {
+  padding: 5px 8px;
+  font-size: 13px;
+  min-width: 150px;
+}
+
+.sched-label {
+  flex: 1 1 220px;
+  font-size: 13px;
+  color: var(--muted);
 }
