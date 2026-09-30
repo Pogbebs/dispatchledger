@@ -12,3 +12,4 @@ analytics/dbt_packages/
 pipelines/logs/
 
 pipelines/logs/
+app_url.txt

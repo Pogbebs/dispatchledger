@@ -8,6 +8,11 @@ Built to answer the question that defines multi-tenant SaaS: **how do you guaran
 
 ![Orders board](docs/orders-board.png)
 
+**[Live demo](https://dispatchledger-59zi.onrender.com)** — tenant `gulf-coast`,
+`admin@gulf-coast.example.com`, `demo1234`. Sign in as `lone-star` to see the
+same screens with entirely separate data.
+
+Hosted on a free instance that sleeps after 15 minutes idle. The first request after a quiet period takes up to a minute to wake.
 ---
 
 ## What's in it
