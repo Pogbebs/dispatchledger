@@ -327,7 +327,7 @@ Python 3.14 · PostgreSQL 16 · SQLAlchemy 2.0 · Alembic · FastAPI · React 18
 | Warehouse — dbt star schema with 76 data tests | done |
 | Pipeline — Airflow, live EIA price ingest, nightly rebuild | done |
 | CI — tests, warehouse, type-check and DAG parse on every push | done |
-| Cloud deployment | planned |
+| Cloud deployment | done |
 
 ---
 
