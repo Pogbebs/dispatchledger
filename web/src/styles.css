@@ -470,3 +470,28 @@ tbody tr:hover {
 @media (max-width: 720px) {
   .chart-readout { margin-left: 0; }
 }
+
+/* ---------- inline row actions ---------- */
+/* Several small controls inside one table cell: a driver select, a date and
+   two buttons. Without a flex wrapper they stack, and the row grows to four
+   lines the moment anything is being edited. */
+.inline-form {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: nowrap;
+}
+
+.inline-form select,
+.inline-form input {
+  padding: 4px 8px;
+  font-size: 13px;
+  min-width: 0;
+}
+
+.inline-form select { max-width: 150px; }
+.inline-form input[type="date"] { width: 140px; }
+
+@media (max-width: 900px) {
+  .inline-form { flex-wrap: wrap; }
+}

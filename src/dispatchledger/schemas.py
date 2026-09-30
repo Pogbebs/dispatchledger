@@ -178,3 +178,64 @@ class InsightsOut(BaseModel):
     warehouse_available: bool
     weeks: list[WeeklyPricePosition]
     summary: InsightsSummary | None
+
+
+# ---------- scheduling ----------
+
+class DeliveryReschedule(BaseModel):
+    """Both fields optional: a reassignment and a date change are separate acts.
+
+    ``driver_id`` set to null is meaningful -- it unassigns -- so the model
+    has to distinguish "not supplied" from "supplied as null". That is what
+    ``model_fields_set`` is for in the handler.
+    """
+
+    driver_id: uuid.UUID | None = None
+    scheduled_at: datetime | None = None
+
+
+class DriverOut(BaseModel):
+    """Only what a scheduling dropdown needs. No email, no role, no hash."""
+
+    model_config = ORM
+    id: uuid.UUID
+    full_name: str
+
+
+class SiteCreate(BaseModel):
+    customer_id: uuid.UUID
+    address: str = Field(min_length=1, max_length=300)
+    tank_capacity_gal: Decimal = Field(gt=0, max_digits=10, decimal_places=2)
+
+
+# ---------- invoices ----------
+
+class InvoiceRow(BaseModel):
+    model_config = ORM
+    id: uuid.UUID
+    invoice_number: str
+    customer_id: uuid.UUID
+    customer_name: str
+    issued_at: date
+    due_date: date
+    amount: Decimal
+    status: str
+    paid_at: datetime | None
+    delivered_gal: Decimal | None
+    # Days past due, computed server-side. The client's clock is not the
+    # authority on whether a bill is late.
+    days_overdue: int
+
+
+class InvoiceSummary(BaseModel):
+    outstanding_count: int
+    outstanding_total: Decimal
+    overdue_count: int
+    overdue_total: Decimal
+    paid_count: int
+    paid_total: Decimal
+
+
+class InvoicesOut(BaseModel):
+    rows: list[InvoiceRow]
+    summary: InvoiceSummary

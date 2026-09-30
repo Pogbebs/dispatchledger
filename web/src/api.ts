@@ -129,6 +129,41 @@ export interface DeliveryRow {
   driver_name: string | null;
 }
 
+
+export interface Driver {
+  id: string;
+  full_name: string;
+}
+
+export interface InvoiceRow {
+  id: string;
+  invoice_number: string;
+  customer_id: string;
+  customer_name: string;
+  issued_at: string;
+  due_date: string;
+  amount: string;
+  status: string;
+  paid_at: string | null;
+  delivered_gal: string | null;
+  /** Computed by the server. The browser's clock does not decide what is late. */
+  days_overdue: number;
+}
+
+export interface InvoiceSummary {
+  outstanding_count: number;
+  outstanding_total: string;
+  overdue_count: number;
+  overdue_total: string;
+  paid_count: number;
+  paid_total: string;
+}
+
+export interface Invoices {
+  rows: InvoiceRow[];
+  summary: InvoiceSummary;
+}
+
 /** Warehouse rows, not application rows. Read through the same tenant-scoped
  *  connection as everything else -- the mart carries its own row-security
  *  policy so the API never needs the analytics credential. */
@@ -201,6 +236,45 @@ export const api = {
     request<DeliveryRow[]>(
       `/deliveries?limit=100${status ? `&status=${status}` : ""}`,
     ),
+
+
+  drivers: () => request<Driver[]>("/drivers"),
+
+  createCustomer: (body: {
+    name: string;
+    email?: string | null;
+    phone?: string | null;
+    payment_terms_days: number;
+  }) => request<Customer>("/customers", { method: "POST", body: JSON.stringify(body) }),
+
+  createSite: (body: {
+    customer_id: string;
+    address: string;
+    tank_capacity_gal: string;
+  }) => request<Site>("/sites", { method: "POST", body: JSON.stringify(body) }),
+
+  scheduleDelivery: (body: {
+    order_id: string;
+    driver_id: string | null;
+    scheduled_at: string;
+  }) => request<DeliveryRow>("/deliveries", {
+    method: "POST",
+    body: JSON.stringify(body),
+  }),
+
+  rescheduleDelivery: (
+    id: string,
+    body: { driver_id?: string | null; scheduled_at?: string },
+  ) => request<DeliveryRow>(`/deliveries/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  }),
+
+  invoices: (status?: string) =>
+    request<Invoices>(`/invoices?limit=200${status ? `&status=${status}` : ""}`),
+
+  payInvoice: (id: string) =>
+    request<InvoiceRow>(`/invoices/${id}/pay`, { method: "POST" }),
 
   insights: (weeks = 26) => request<Insights>(`/insights?weeks=${weeks}`),
 

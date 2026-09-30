@@ -7,7 +7,15 @@ from sqlalchemy import text
 
 from dispatchledger.config import REPO_ROOT
 from dispatchledger.db import admin_engine, app_engine
-from dispatchledger.routers import auth, catalog, customers, deliveries, insights, orders
+from dispatchledger.routers import (
+    auth,
+    catalog,
+    customers,
+    deliveries,
+    insights,
+    invoices,
+    orders,
+)
 
 app = FastAPI(
     title="DispatchLedger",
@@ -24,6 +32,7 @@ app.include_router(customers.router)
 app.include_router(orders.router)
 app.include_router(deliveries.router)
 app.include_router(catalog.router)
+app.include_router(invoices.router)
 app.include_router(insights.router)
 
 

@@ -3,6 +3,7 @@ import {
   ApiError,
   api,
   type Customer,
+  type Driver,
   type OrderRow,
   type Product,
   type Site,
@@ -12,15 +13,33 @@ import { Pill, day, gallons, money, price } from "../format";
 
 const STATUSES = ["pending", "scheduled", "delivered", "cancelled"];
 
+/**
+ * A delivery is scheduled for a morning slot. The API takes a timestamp, the
+ * dispatcher thinks in days, and inventing a time-picker for a business where
+ * the delivery window is "Tuesday" would be precision nobody asked for.
+ */
+function morningOf(date: string): string {
+  return `${date}T08:00:00Z`;
+}
+
 export default function Orders() {
   const { user } = useAuth();
   const canEdit = user?.role === "admin" || user?.role === "dispatcher";
 
   const [rows, setRows] = useState<OrderRow[]>([]);
+  const [drivers, setDrivers] = useState<Driver[]>([]);
   const [status, setStatus] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+
+  // Which order is being scheduled, and the values for it.
+  const [scheduling, setScheduling] = useState<string | null>(null);
+  const [driverId, setDriverId] = useState("");
+  const [schedDate, setSchedDate] = useState(() =>
+    new Date(Date.now() + 86400000).toISOString().slice(0, 10),
+  );
+  const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -38,12 +57,39 @@ export default function Orders() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    if (!canEdit) return;
+    api.drivers().then(setDrivers).catch(() => {
+      // Not fatal: scheduling still works with the delivery unassigned, and a
+      // failed dropdown should not take the whole board down.
+    });
+  }, [canEdit]);
+
   async function cancel(id: string) {
     try {
       await api.cancelOrder(id);
       await load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not cancel.");
+    }
+  }
+
+  async function schedule(orderId: string) {
+    setBusy(true);
+    try {
+      await api.scheduleDelivery({
+        order_id: orderId,
+        driver_id: driverId || null,
+        scheduled_at: morningOf(schedDate),
+      });
+      setScheduling(null);
+      await load();
+    } catch (err) {
+      setError(
+        err instanceof ApiError ? err.message : "Could not schedule the delivery.",
+      );
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -66,10 +112,7 @@ export default function Orders() {
             ))}
           </select>
           {canEdit && (
-            <button
-              className="btn"
-              onClick={() => setShowForm((open) => !open)}
-            >
+            <button className="btn" onClick={() => setShowForm((open) => !open)}>
               {showForm ? "Close" : "New order"}
             </button>
           )}
@@ -122,15 +165,61 @@ export default function Orders() {
                 </td>
                 {canEdit && (
                   <td>
-                    {row.status !== "delivered" &&
-                      row.status !== "cancelled" && (
+                    {scheduling === row.id ? (
+                      <span className="inline-form">
+                        <select
+                          value={driverId}
+                          onChange={(e) => setDriverId(e.target.value)}
+                          aria-label="Driver"
+                        >
+                          <option value="">Unassigned</option>
+                          {drivers.map((d) => (
+                            <option key={d.id} value={d.id}>
+                              {d.full_name}
+                            </option>
+                          ))}
+                        </select>
+                        <input
+                          type="date"
+                          value={schedDate}
+                          onChange={(e) => setSchedDate(e.target.value)}
+                          aria-label="Delivery date"
+                        />
+                        <button
+                          className="btn btn-sm"
+                          disabled={busy}
+                          onClick={() => schedule(row.id)}
+                        >
+                          {busy ? "…" : "Confirm"}
+                        </button>
                         <button
                           className="btn btn-quiet btn-sm"
-                          onClick={() => cancel(row.id)}
+                          onClick={() => setScheduling(null)}
                         >
                           Cancel
                         </button>
-                      )}
+                      </span>
+                    ) : (
+                      <span className="inline-form">
+                        {row.status === "pending" && (
+                          <button
+                            className="btn btn-sm"
+                            onClick={() => setScheduling(row.id)}
+                          >
+                            Schedule
+                          </button>
+                        )}
+                        {row.status !== "delivered" &&
+                          row.status !== "cancelled" && (
+                            <button
+                              className="btn btn-quiet btn-sm"
+                              onClick={() => cancel(row.id)}
+                            >
+                              Cancel
+                            </button>
+                          )}
+                      </span>
+                    )}
                   </td>
                 )}
               </tr>
@@ -164,16 +253,31 @@ function NewOrderForm({
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [busy, setBusy] = useState(false);
 
+  // Adding a customer mid-order, rather than abandoning the order and coming
+  // back. A first delivery to a new customer is exactly when an order gets
+  // typed in, so requiring the customer to exist first gets the sequence
+  // backwards.
+  const [addingCustomer, setAddingCustomer] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newTerms, setNewTerms] = useState("30");
+  const [newAddress, setNewAddress] = useState("");
+  const [newCapacity, setNewCapacity] = useState("5000");
+
+  const loadCustomers = useCallback(async () => {
+    const list = await api.customers();
+    setCustomers(list);
+    return list;
+  }, []);
+
   useEffect(() => {
-    Promise.all([api.customers(), api.products()])
+    Promise.all([loadCustomers(), api.products()])
       .then(([c, p]) => {
-        setCustomers(c);
         setProducts(p);
         if (c[0]) setCustomerId(c[0].id);
         if (p[0]) setProductId(p[0].id);
       })
       .catch(() => onError("Could not load the order form."));
-  }, [onError]);
+  }, [loadCustomers, onError]);
 
   // Sites belong to a customer, so the list reloads whenever it changes.
   useEffect(() => {
@@ -191,6 +295,38 @@ function NewOrderForm({
     () => products.find((p) => p.id === productId),
     [products, productId],
   );
+
+  async function createCustomer(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    try {
+      // Two calls, in order: a site needs a customer to belong to. If the
+      // second fails the customer still exists, which is recoverable -- the
+      // dispatcher adds the site and carries on -- where a half-created site
+      // pointing at nothing would not be.
+      const customer = await api.createCustomer({
+        name: newName,
+        payment_terms_days: Number(newTerms),
+      });
+      await api.createSite({
+        customer_id: customer.id,
+        address: newAddress,
+        tank_capacity_gal: Number(newCapacity).toFixed(2),
+      });
+
+      await loadCustomers();
+      setCustomerId(customer.id);
+      setAddingCustomer(false);
+      setNewName("");
+      setNewAddress("");
+    } catch (err) {
+      onError(
+        err instanceof ApiError ? err.message : "Could not add the customer.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -213,6 +349,69 @@ function NewOrderForm({
     }
   }
 
+  if (addingCustomer) {
+    return (
+      <form className="form-grid" onSubmit={createCustomer}>
+        <div>
+          <label htmlFor="cname">Customer name</label>
+          <input
+            id="cname"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            required
+            autoFocus
+          />
+        </div>
+
+        <div>
+          <label htmlFor="cterms">Payment terms (days)</label>
+          <input
+            id="cterms"
+            type="number"
+            min="0"
+            max="120"
+            value={newTerms}
+            onChange={(e) => setNewTerms(e.target.value)}
+            required
+          />
+        </div>
+
+        <div>
+          <label htmlFor="caddr">First delivery site</label>
+          <input
+            id="caddr"
+            value={newAddress}
+            onChange={(e) => setNewAddress(e.target.value)}
+            required
+          />
+        </div>
+
+        <div>
+          <label htmlFor="ccap">Tank capacity (gal)</label>
+          <input
+            id="ccap"
+            type="number"
+            min="1"
+            value={newCapacity}
+            onChange={(e) => setNewCapacity(e.target.value)}
+            required
+          />
+        </div>
+
+        <button className="btn" disabled={busy}>
+          {busy ? "Adding…" : "Add customer"}
+        </button>
+        <button
+          type="button"
+          className="btn btn-quiet"
+          onClick={() => setAddingCustomer(false)}
+        >
+          Back
+        </button>
+      </form>
+    );
+  }
+
   return (
     <form className="form-grid" onSubmit={submit}>
       <div>
@@ -220,13 +419,17 @@ function NewOrderForm({
         <select
           id="customer"
           value={customerId}
-          onChange={(e) => setCustomerId(e.target.value)}
+          onChange={(e) => {
+            if (e.target.value === "__new") setAddingCustomer(true);
+            else setCustomerId(e.target.value);
+          }}
         >
           {customers.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}
             </option>
           ))}
+          <option value="__new">+ New customer…</option>
         </select>
       </div>
 

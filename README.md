@@ -8,11 +8,6 @@ Built to answer the question that defines multi-tenant SaaS: **how do you guaran
 
 ![Orders board](docs/orders-board.png)
 
-**[Live demo](https://dispatchledger-59zi.onrender.com)** — tenant `gulf-coast`,
-`admin@gulf-coast.example.com`, `demo1234`. Sign in as `lone-star` to see the
-same screens with entirely separate data.
-
-Hosted on a free instance that sleeps after 15 minutes idle. The first request after a quiet period takes up to a minute to wake.
 ---
 
 ## What's in it
@@ -32,8 +27,8 @@ flowchart LR
 | Layer | What it does |
 |---|---|
 | **Database** | 8 tables, every schema change an Alembic migration, tenant isolation enforced by RLS policies |
-| **API** | FastAPI with JWT auth, per-request tenant scoping, role-based access, 35 tests |
-| **Web** | React + TypeScript: orders board, delivery completion, customer list, pricing insights |
+| **API** | FastAPI with JWT auth, per-request tenant scoping, role-based access, 68 tests |
+| **Web** | React + TypeScript: orders board, scheduling, delivery completion, customers, receivables, pricing insights |
 | **Warehouse** | dbt star schema — 6 dimensions, 3 facts, 1 aggregate, 76 data tests |
 | **Pipeline** | Airflow DAG ingesting live EIA fuel prices, rebuilding and testing the warehouse nightly |
 
@@ -121,6 +116,29 @@ Completing a delivery records what actually arrived, then invoices for that amou
 Customers carry the payment terms that set each invoice's due date, which is what drives the receivables ageing in the warehouse.
 
 ![Customers](docs/customer-board.png)
+
+### The order lifecycle, end to end
+
+A dispatcher can follow one order all the way through without leaving the app:
+
+```
+New order  ->  Schedule  ->  Complete  ->  Invoice
+  (pending)    (assign a     (record      (raised for
+               driver and    gallons      the gallons
+               a date)       delivered)   that arrived)
+```
+
+Two details in that chain are enforced rather than assumed. A delivery can
+only be assigned to a user whose role is `driver` in the same tenant — the
+schema cannot express that, since `driver_id` is just a user id, so the
+handler checks it and the row-security policy makes another tenant's driver
+invisible rather than merely forbidden. And a completed delivery cannot be
+rescheduled: its invoice is already written, and moving it afterwards would
+put the billing record and the delivery record into disagreement.
+
+Customers can be added mid-order. A first delivery to a new customer is
+exactly when an order gets typed in, so requiring the customer to exist
+beforehand gets the sequence backwards.
 
 ## The warehouse
 
@@ -218,7 +236,7 @@ Non-diesel deliveries are kept with a null market price rather than dropped. Gas
 | Suite | Count | What it covers |
 |---|---|---|
 | `check_isolation.py` | 8 | Tenant isolation at the database level, as the app role — including a dbt-rebuilt mart |
-| `pytest` | 38 | Auth, roles, business rules, cross-tenant 404s, connection-pool leakage, health |
+| `pytest` | 68 | Auth, roles, scheduling, receivables, cross-tenant 404s, connection-pool leakage, health |
 | `dbt test` | 76 | Schema constraints, referential integrity, and six named data defects |
 
 All three run in CI against a real Postgres, along with a TypeScript build and a DAG import check.
@@ -323,11 +341,12 @@ Python 3.14 · PostgreSQL 16 · SQLAlchemy 2.0 · Alembic · FastAPI · React 18
 | Data model, row-level security, seed data, isolation checks | done |
 | REST API — auth, per-request tenant scoping, role-based access | done |
 | Web interface — orders board, delivery completion, customers | done |
+| Order lifecycle — scheduling, reassignment, receivables | done |
 | Insights — warehouse-backed pricing screen, RLS preserved across rebuilds | done |
 | Warehouse — dbt star schema with 76 data tests | done |
 | Pipeline — Airflow, live EIA price ingest, nightly rebuild | done |
 | CI — tests, warehouse, type-check and DAG parse on every push | done |
-| Cloud deployment | done |
+| Cloud deployment — Neon, Render, container build | done |
 
 ---
 

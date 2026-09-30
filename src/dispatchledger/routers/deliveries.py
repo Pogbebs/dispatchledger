@@ -14,10 +14,34 @@ from dispatchledger.schemas import (
     DeliveryComplete,
     DeliveryCreate,
     DeliveryOut,
+    DeliveryReschedule,
     DeliveryRow,
 )
 
 router = APIRouter(prefix="/deliveries", tags=["deliveries"])
+
+
+def _validated_driver(session: Session, driver_id: uuid.UUID | None) -> uuid.UUID | None:
+    """Confirm a driver id refers to a driver in this tenant.
+
+    Two checks, for two different mistakes. The lookup runs under the
+    row-security policy, so another tenant's user returns None and cannot be
+    assigned a delivery -- the id being real is not enough. The role check
+    stops an admin or dispatcher being put on a run, which the schema allows
+    (driver_id is just a user id) and the business does not.
+    """
+    if driver_id is None:
+        return None
+
+    driver = session.get(User, driver_id)
+    if driver is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Driver not found")
+    if driver.role != "driver":
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            f"{driver.full_name} is a {driver.role}, not a driver",
+        )
+    return driver.id
 
 
 @router.get("", response_model=list[DeliveryRow])
@@ -73,7 +97,7 @@ def schedule_delivery(
     delivery = Delivery(
         tenant_id=user.tenant_id,
         order_id=order.id,
-        driver_id=payload.driver_id,
+        driver_id=_validated_driver(session, payload.driver_id),
         scheduled_at=payload.scheduled_at,
         status="scheduled",
     )
@@ -131,5 +155,47 @@ def complete_delivery(
             status="unpaid",
         )
     )
+    session.flush()
+    return delivery
+
+
+@router.patch("/{delivery_id}", response_model=DeliveryOut)
+def reschedule_delivery(
+    delivery_id: uuid.UUID,
+    payload: DeliveryReschedule,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(require_role("admin", "dispatcher")),
+) -> Delivery:
+    """Change the driver or the date on a delivery that has not happened yet.
+
+    Trucks break down and people call in sick, so a schedule that cannot be
+    changed is a schedule that gets kept in a spreadsheet instead.
+
+    Only dispatchers and admins: a driver reassigning their own run to someone
+    else is not a workflow, it is an argument.
+    """
+    delivery = session.get(Delivery, delivery_id)
+    if delivery is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Delivery not found")
+    if delivery.status == "completed":
+        # The invoice is already written against it. Changing who delivered
+        # or when, after the fact, would put the billing record and the
+        # delivery record into disagreement.
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Delivery is completed and cannot be rescheduled",
+        )
+
+    supplied = payload.model_fields_set
+    if not supplied:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Nothing to change")
+
+    # An explicit null unassigns the driver, which is different from the field
+    # being absent -- hence model_fields_set rather than a None check.
+    if "driver_id" in supplied:
+        delivery.driver_id = _validated_driver(session, payload.driver_id)
+    if "scheduled_at" in supplied and payload.scheduled_at is not None:
+        delivery.scheduled_at = payload.scheduled_at
+
     session.flush()
     return delivery

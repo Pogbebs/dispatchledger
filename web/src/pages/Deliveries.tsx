@@ -1,16 +1,29 @@
 import { useCallback, useEffect, useState } from "react";
-import { ApiError, api, type DeliveryRow } from "../api";
+import { ApiError, api, type DeliveryRow, type Driver } from "../api";
+import { useAuth } from "../auth";
 import { Pill, dayTime, gallons } from "../format";
 
 const STATUSES = ["scheduled", "in_transit", "completed", "failed"];
 
 export default function Deliveries() {
+  const { user } = useAuth();
+  const canDispatch = user?.role === "admin" || user?.role === "dispatcher";
+
   const [rows, setRows] = useState<DeliveryRow[]>([]);
+  const [drivers, setDrivers] = useState<Driver[]>([]);
   const [status, setStatus] = useState("scheduled");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
   const [completing, setCompleting] = useState<string | null>(null);
   const [amount, setAmount] = useState("");
+
+  // Reassignment is a dispatcher's act, so it gets its own edit state rather
+  // than sharing the driver's completion row.
+  const [editing, setEditing] = useState<string | null>(null);
+  const [driverId, setDriverId] = useState("");
+  const [when, setWhen] = useState("");
+  const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -30,11 +43,26 @@ export default function Deliveries() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    if (!canDispatch) return;
+    api.drivers().then(setDrivers).catch(() => {
+      // A failed dropdown should not take the board down with it.
+    });
+  }, [canDispatch]);
+
   function startCompleting(row: DeliveryRow) {
+    setEditing(null);
     setCompleting(row.id);
     // Pre-fill with the ordered amount: the driver adjusts down to what the
     // tank actually took, which is the normal case.
     setAmount(String(Math.round(Number(row.ordered_gal))));
+  }
+
+  function startEditing(row: DeliveryRow) {
+    setCompleting(null);
+    setEditing(row.id);
+    setDriverId(row.driver_id ?? "");
+    setWhen(row.scheduled_at.slice(0, 10));
   }
 
   async function confirm(id: string) {
@@ -46,6 +74,27 @@ export default function Deliveries() {
       setError(
         err instanceof ApiError ? err.message : "Could not complete delivery.",
       );
+    }
+  }
+
+  async function saveEdit(id: string) {
+    setBusy(true);
+    try {
+      // Both fields are sent because both are editable on this row. The API
+      // distinguishes an absent field from an explicit null, so sending null
+      // here is what unassigns a driver.
+      await api.rescheduleDelivery(id, {
+        driver_id: driverId || null,
+        scheduled_at: `${when}T08:00:00Z`,
+      });
+      setEditing(null);
+      await load();
+    } catch (err) {
+      setError(
+        err instanceof ApiError ? err.message : "Could not reschedule.",
+      );
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -101,38 +150,83 @@ export default function Deliveries() {
                   <Pill status={row.status} />
                 </td>
                 <td>
-                  {row.status !== "completed" &&
-                    (completing === row.id ? (
-                      <span style={{ display: "flex", gap: 6 }}>
-                        <input
-                          type="number"
-                          value={amount}
-                          onChange={(e) => setAmount(e.target.value)}
-                          style={{ width: 110 }}
-                          aria-label="Gallons delivered"
-                          autoFocus
-                        />
-                        <button
-                          className="btn btn-sm"
-                          onClick={() => confirm(row.id)}
-                        >
-                          Save
-                        </button>
-                        <button
-                          className="btn btn-quiet btn-sm"
-                          onClick={() => setCompleting(null)}
-                        >
-                          Cancel
-                        </button>
-                      </span>
-                    ) : (
+                  {editing === row.id ? (
+                    <span className="inline-form">
+                      <select
+                        value={driverId}
+                        onChange={(e) => setDriverId(e.target.value)}
+                        aria-label="Driver"
+                      >
+                        <option value="">Unassigned</option>
+                        {drivers.map((d) => (
+                          <option key={d.id} value={d.id}>
+                            {d.full_name}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        type="date"
+                        value={when}
+                        onChange={(e) => setWhen(e.target.value)}
+                        aria-label="Scheduled date"
+                      />
+                      <button
+                        className="btn btn-sm"
+                        disabled={busy}
+                        onClick={() => saveEdit(row.id)}
+                      >
+                        {busy ? "…" : "Save"}
+                      </button>
                       <button
                         className="btn btn-quiet btn-sm"
-                        onClick={() => startCompleting(row)}
+                        onClick={() => setEditing(null)}
                       >
-                        Complete
+                        Cancel
                       </button>
-                    ))}
+                    </span>
+                  ) : completing === row.id ? (
+                    <span className="inline-form">
+                      <input
+                        type="number"
+                        value={amount}
+                        onChange={(e) => setAmount(e.target.value)}
+                        style={{ width: 110 }}
+                        aria-label="Gallons delivered"
+                        autoFocus
+                      />
+                      <button
+                        className="btn btn-sm"
+                        onClick={() => confirm(row.id)}
+                      >
+                        Save
+                      </button>
+                      <button
+                        className="btn btn-quiet btn-sm"
+                        onClick={() => setCompleting(null)}
+                      >
+                        Cancel
+                      </button>
+                    </span>
+                  ) : (
+                    row.status !== "completed" && (
+                      <span className="inline-form">
+                        <button
+                          className="btn btn-quiet btn-sm"
+                          onClick={() => startCompleting(row)}
+                        >
+                          Complete
+                        </button>
+                        {canDispatch && (
+                          <button
+                            className="btn btn-quiet btn-sm"
+                            onClick={() => startEditing(row)}
+                          >
+                            Reassign
+                          </button>
+                        )}
+                      </span>
+                    )
+                  )}
                 </td>
               </tr>
             ))}
