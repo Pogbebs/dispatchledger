@@ -169,6 +169,14 @@ def main() -> int:
                 sql.Identifier(database)
             )
         )
+        # This role also ingests the EIA benchmark, so it writes one table.
+        # Market data with no tenant column -- no boundary is crossed by it.
+        cur.execute("SELECT to_regclass('public.raw_fuel_prices')")
+        if cur.fetchone()[0] is not None:
+            cur.execute(
+                "GRANT SELECT, INSERT, UPDATE ON raw_fuel_prices TO dispatch_analytics"
+            )
+            print("    granted insert/update on raw_fuel_prices")
         cur.execute("GRANT CREATE, USAGE ON SCHEMA analytics TO dispatch_analytics")
         print("    created, granted on public and analytics")
 
