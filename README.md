@@ -10,14 +10,20 @@ Built to answer the question that defines multi-tenant SaaS: **how do you guaran
 
 **[dispatchledger-59zi.onrender.com](https://dispatchledger-59zi.onrender.com)**
 
-| Company | Sign in as | Password |
+| Sign in as | Password | You are |
 |---|---|---|
-| Gulf Coast Fuel Co. | `admin@gulf-coast.example.com` | `demo1234` |
-| Lone Star Bulk Supply | `admin@lone-star.example.com` | `demo1234` |
+| `admin@gulf-coast.example.com` | `demo1234` | Staff at Gulf Coast Fuel Co. |
+| `admin@lone-star.example.com` | `demo1234` | Staff at a competing distributor |
+| `customer@gulf-coast.example.com` | `demo1234` | A customer **of** Gulf Coast |
 
-Each company also has `dispatch@…` and `driver1@…` accounts on the same password, if you want to see what a role with fewer permissions is allowed to do.
+Each distributor also has `dispatch@…` and `driver1@…` accounts on the same password, if you want to see the same screens with fewer permissions.
 
-Sign in as one, then the other: same application, same queries, two disjoint sets of customers, orders and invoices. Nothing in the API code filters by tenant — the policies do it.
+Those three logins are worth walking in order, because each one narrows the view:
+
+1. **The two distributors.** Same application, same queries, two disjoint sets of customers, orders and invoices. Nothing in the API filters by tenant — the policies do.
+2. **The customer.** Signs into the same deployment and sees their own orders and invoices — not their distributor's other eleven customers. That is a narrower rule than tenant isolation, and it runs on a third database role whose policy is *restrictive*: ANDed with the tenant policy, so it can only ever see less, never more.
+
+Ask the customer account for something it should not have. Type `/insights` into the address bar and you land back on your own orders; the margin data it would show sits in a schema that role has no grant on at all.
 
 Hosted on Render's free tier, which suspends an idle service. The first request after a quiet spell takes about 50 seconds to wake; everything after that is immediate.
 
@@ -31,7 +37,7 @@ Hosted on Render's free tier, which suspends an idle service. The first request 
 flowchart LR
     U[React app<br/>orders, deliveries, insights] --> A[FastAPI<br/>auth + tenant scoping]
     A --> P[(Postgres<br/>row-level security)]
-    E[EIA open data<br/>diesel prices] --> W[Airflow<br/>daily at 06:00]
+    E[EIA open data<br/>diesel prices] --> W[Nightly job<br/>Airflow locally]
     W --> P
     W --> D[dbt<br/>star schema + 76 tests]
     P --> D
@@ -41,11 +47,11 @@ flowchart LR
 
 | Layer | What it does |
 |---|---|
-| **Database** | 8 tables, every schema change an Alembic migration, tenant isolation enforced by RLS policies |
-| **API** | FastAPI with JWT auth, per-request tenant scoping, role-based access, 68 tests |
-| **Web** | React + TypeScript: orders board, scheduling, delivery completion, customers, receivables, pricing insights |
+| **Database** | 9 tables, every schema change an Alembic migration, isolation enforced by RLS policies — tenant-wide for staff, customer-scoped for the portal |
+| **API** | FastAPI with JWT auth, per-request tenant scoping, role-based access, 96 tests |
+| **Web** | React + TypeScript: staff platform (orders, scheduling, deliveries, customers, receivables, insights) and a customer portal |
 | **Warehouse** | dbt star schema — 6 dimensions, 3 facts, 1 aggregate, 76 data tests |
-| **Pipeline** | Airflow DAG ingesting live EIA fuel prices, rebuilding and testing the warehouse nightly |
+| **Pipeline** | Live EIA price ingest and a nightly warehouse rebuild — Airflow locally, a scheduled workflow in production |
 
 The dotted line is the part worth reading the code for: the application reads
 one warehouse table directly, under the same row-level security as everything
@@ -154,6 +160,65 @@ put the billing record and the delivery record into disagreement.
 Customers can be added mid-order. A first delivery to a new customer is
 exactly when an order gets typed in, so requiring the customer to exist
 beforehand gets the sequence backwards.
+
+## The customer portal: a rule narrower than the tenant
+
+Staff see everything belonging to their distributor. A customer must see
+strictly less — their own orders, sites and invoices, not their distributor's
+other customers'. Those rows sit in the same tables, carry the same
+`tenant_id`, and differ only in `customer_id`.
+
+The tempting fix is to widen the existing policy: match the tenant, and also
+the customer *if* a customer setting is present. That inverts the design.
+Every policy here fails closed, and one that read "no customer set" as "all
+customers" would fail open — a missed `SET LOCAL` would hand someone their
+competitor's pricing.
+
+So the portal gets a login role of its own, and a policy that can only
+subtract:
+
+```sql
+create policy customer_scope on orders
+    as restrictive for all to dispatch_portal
+    using (customer_id = nullif(current_setting('app.current_customer', true), '')::uuid);
+```
+
+Three words carry it. **`restrictive`** means ANDed with the tenant policy
+rather than ORed: both must pass, so this connection can never see more than
+a staff connection, only less. **`to dispatch_portal`** scopes it to that role
+alone, so nothing staff do changes and no existing test changed. And
+**`nullif(...)`** is NULL when unset, matching no row — the same failure
+direction as the tenant policy.
+
+Because the database decides, no handler in the portal filters by customer.
+There is not one `where customer_id =` in the file, and adding one would be
+redundant rather than protective.
+
+| Role | Connects as | Sees |
+|---|---|---|
+| Staff | `dispatch_app` | Everything in their tenant |
+| Customer | `dispatch_portal` | Their own rows inside that tenant |
+| dbt | `dispatch_analytics` | Every tenant — `BYPASSRLS`, never on the request path |
+
+### Accounts are issued, not claimed
+
+There is no customer sign-up form, deliberately. Open signup would let anyone
+insert themselves into a distributor's customer book, which is the boundary
+this project exists to defend. The dispatcher issues a single-use invitation
+from the Customers page; the customer follows the link and sets a password.
+Only the token's hash is stored, so a copy of that table is not a set of
+working invitations.
+
+### The hole a fourth role opened
+
+Adding the portal exposed a real bug in code that had been correct until then.
+Several staff read endpoints — `/orders`, `/deliveries`, `/customers` — carry
+no role guard, because before this there was nothing to guard against. A
+customer's token would have passed straight through them on the staff
+connection and listed the entire tenant.
+
+The refusal now lives in the shared session dependency rather than on each
+route, where a new endpoint cannot forget it. Six tests walk the list.
 
 ## The warehouse
 
@@ -329,6 +394,8 @@ usable default, and the code refuses to start rather than substituting one.
 | `APP_DATABASE_URL` | deployment | `dispatch_app`, the role RLS applies to |
 | `APP_DB_PASSWORD` | deployment | Password the migrations set on `dispatch_app` |
 | `ANALYTICS_DB_PASSWORD` | deployment | Password for `dispatch_analytics` |
+| `PORTAL_DATABASE_URL` | deployment | `dispatch_portal`, the customer-scoped role |
+| `PORTAL_DB_PASSWORD` | deployment | Password the migrations set on `dispatch_portal` |
 | `EIA_API_KEY` | optional | Without it the price fetch skips and everything else runs |
 
 `JWT_SECRET` is the one that matters most, and the reason it has no fallback
@@ -339,6 +406,13 @@ repository — silently, on a deployment that looked perfectly healthy.
 
 `ANALYTICS_DB_PASSWORD` is the second: that role carries `BYPASSRLS`, so every
 policy protecting every other role is void for it.
+
+The portal pair has to be set *before* the migration that creates the role
+runs, because that migration reads `PORTAL_DB_PASSWORD` to set it. Set late,
+the role is created with the development literal in this repository — on a
+login reachable from the internet, by people outside the distributor. The
+health check tries all three connections, so a mismatch between the two fails
+the deploy instead of waiting to be discovered.
 
 The same reasoning runs through the rest of the project. An unset tenant
 returns zero rows rather than every row; an absent EIA key raises rather than
@@ -359,9 +433,10 @@ Python 3.14 · PostgreSQL 16 · SQLAlchemy 2.0 · Alembic · FastAPI · React 18
 | Order lifecycle — scheduling, reassignment, receivables | done |
 | Insights — warehouse-backed pricing screen, RLS preserved across rebuilds | done |
 | Warehouse — dbt star schema with 76 data tests | done |
-| Pipeline — Airflow, live EIA price ingest, nightly rebuild | done |
+| Pipeline — live EIA price ingest and nightly rebuild, on a schedule | done |
 | CI — tests, warehouse, type-check and DAG parse on every push | done |
 | Cloud deployment — Neon, Render, container build | done |
+| Customer portal — restrictive policy on a third role, invitations | done |
 
 ---
 
