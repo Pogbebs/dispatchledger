@@ -128,6 +128,10 @@ jobs:
       # builds but fails its own assertions does not get published as if it
       # were fine.
       - name: Rebuild the warehouse
+        # dbt_project.yml lives in analytics/, and dbt looks for it in the
+        # working directory rather than anywhere on a path. ci.yml does the
+        # same; this workflow was written without it.
+        working-directory: analytics
         run: uv run dbt build --target prod
 
       # The marts are dropped and recreated by dbt, and a new table does not
