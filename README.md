@@ -6,6 +6,21 @@ A multi-tenant operations platform for fuel and bulk-liquid distributors — cus
 
 Built to answer the question that defines multi-tenant SaaS: **how do you guarantee one customer can never see another's data?** The answer here is Postgres row-level security rather than a `WHERE` clause developers have to remember.
 
+### Live demo
+
+**[dispatchledger-59zi.onrender.com](https://dispatchledger-59zi.onrender.com)**
+
+| Company | Sign in as | Password |
+|---|---|---|
+| Gulf Coast Fuel Co. | `admin@gulf-coast.example.com` | `demo1234` |
+| Lone Star Bulk Supply | `admin@lone-star.example.com` | `demo1234` |
+
+Each company also has `dispatch@…` and `driver1@…` accounts on the same password, if you want to see what a role with fewer permissions is allowed to do.
+
+Sign in as one, then the other: same application, same queries, two disjoint sets of customers, orders and invoices. Nothing in the API code filters by tenant — the policies do it.
+
+Hosted on Render's free tier, which suspends an idle service. The first request after a quiet spell takes about 50 seconds to wake; everything after that is immediate.
+
 ![Orders board](docs/orders-board.png)
 
 ---
