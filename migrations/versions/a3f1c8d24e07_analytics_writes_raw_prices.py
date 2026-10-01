@@ -1,7 +1,7 @@
 """Let dispatch_analytics write the prices it ingests
 
 Revision ID: a3f1c8d24e07
-Revises: 1d875ec9184d
+Revises: b500a47a4969
 Create Date: 2026-10-01
 
 dispatch_analytics was granted SELECT on everything in public and nothing
@@ -25,7 +25,7 @@ from typing import Sequence, Union
 from alembic import op
 
 revision: str = "a3f1c8d24e07"
-down_revision: Union[str, Sequence[str], None] = "1d875ec9184d"
+down_revision: Union[str, Sequence[str], None] = "b500a47a4969"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
