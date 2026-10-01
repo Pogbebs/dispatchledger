@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useParams } from "react-router-dom";
 import { ApiError, api, setToken } from "../api";
 
@@ -17,6 +17,20 @@ export default function AcceptInvite() {
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // Sign out whoever was using this browser before showing the form.
+  //
+  // An invitation is usually opened in the same window the dispatcher just
+  // used to issue it. Their token is still in storage, probably expired, and
+  // the app checks it on load -- so a session error from a completely
+  // unrelated account appears on this page while someone is trying to set a
+  // password, and reads as though the invitation were the problem.
+  //
+  // Nobody arrives here already signed in on purpose. Clearing it is both
+  // correct and the end of a confusing class of report.
+  useEffect(() => {
+    setToken(null);
+  }, []);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
