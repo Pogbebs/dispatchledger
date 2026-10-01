@@ -1,0 +1,127 @@
+name: Nightly warehouse
+
+# What runs the pipeline in deployment. The Airflow DAG in pipelines/ stays
+# the local orchestration and is unaffected by this -- but running a scheduler,
+# a webserver and a metadata database around the clock to fire four tasks once
+# a day is infrastructure that justifies itself in a diagram and not on an
+# invoice. Two steps on a cron is the right size for this pipeline.
+#
+# Needs five repository secrets (Settings -> Secrets and variables -> Actions):
+#   EIA_API_KEY       the key from eia.gov/opendata
+#   NEON_HOST         the DIRECT endpoint, no -pooler: dbt holds long
+#                     transactions and rebuilds tables, which suits a direct
+#                     connection better than a transaction pooler
+#   NEON_DATABASE     neondb
+#   ANALYTICS_USER    dispatch_analytics
+#   ANALYTICS_PASSWORD
+#
+# dispatch_analytics is the BYPASSRLS role, deliberately: marts aggregate
+# across every tenant, which is precisely what the application role must never
+# be able to do. That exception lives here, named, and nowhere near the
+# request path.
+
+on:
+  schedule:
+    # 06:40 UTC. Not on the hour: scheduled workflows queue behind everyone
+    # else's, and a job asking for 06:00 commonly starts twenty minutes late.
+    # EIA publishes weekly, so the exact minute does not matter -- but a time
+    # that actually fires when it says it does is easier to reason about.
+    - cron: "40 6 * * *"
+  # So a run can be triggered by hand from the Actions tab without waiting
+  # for tomorrow, and so the schedule can be tested the day it is written.
+  workflow_dispatch:
+
+concurrency:
+  # A run that overlaps its predecessor would have two dbt processes dropping
+  # and recreating the same mart tables.
+  group: nightly-warehouse
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    name: Load prices, rebuild marts
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      EIA_API_KEY: ${{ secrets.EIA_API_KEY }}
+      ANALYTICS_DATABASE_URL: >-
+        postgresql://${{ secrets.ANALYTICS_USER }}:${{ secrets.ANALYTICS_PASSWORD }}@${{ secrets.NEON_HOST }}/${{ secrets.NEON_DATABASE }}?sslmode=require
+      DBT_HOST: ${{ secrets.NEON_HOST }}
+      DBT_PORT: "5432"
+      DBT_USER: ${{ secrets.ANALYTICS_USER }}
+      DBT_PASSWORD: ${{ secrets.ANALYTICS_PASSWORD }}
+      DBT_DBNAME: ${{ secrets.NEON_DATABASE }}
+      # Neon refuses a plaintext connection, and the failure without this is a
+      # bare "connection is bad" that says nothing about SSL.
+      DBT_SSLMODE: require
+      DBT_PROFILES_DIR: ${{ github.workspace }}/analytics
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      # Neon suspends an idle compute and takes a few seconds to wake. Doing
+      # that here, where a failure is unambiguous, beats having the first real
+      # step fail on a cold start and look like a credentials problem.
+      - name: Wake the database
+        run: |
+          uv run python - <<'PY'
+          import os, psycopg
+          dsn = os.environ["ANALYTICS_DATABASE_URL"]
+          with psycopg.connect(dsn, connect_timeout=30) as conn, conn.cursor() as cur:
+              cur.execute("SELECT current_user, current_database()")
+              print("connected as %s to %s" % cur.fetchone())
+          PY
+
+      - name: Fetch EIA diesel prices
+        run: uv run python load_prices.py
+
+      # build, not run: it runs the tests alongside the models, so a mart that
+      # builds but fails its own assertions does not get published as if it
+      # were fine.
+      - name: Rebuild the warehouse
+        run: uv run dbt build --target prod
+
+      # The marts are dropped and recreated by dbt, and a new table does not
+      # inherit the old one's row-security policy or its grants. The model's
+      # post_hook re-applies both; this asserts it actually happened, because
+      # a mart silently rebuilt without its policy is the one failure here
+      # that would not announce itself.
+      - name: Check the marts still carry their policy
+        run: |
+          uv run python - <<'PY'
+          import os, sys, psycopg
+
+          TABLE = "agg_weekly_price_position"
+          with psycopg.connect(os.environ["ANALYTICS_DATABASE_URL"], connect_timeout=30) as conn:
+              with conn.cursor() as cur:
+                  cur.execute(
+                      "SELECT c.relrowsecurity, count(p.policyname) "
+                      "FROM pg_class c "
+                      "JOIN pg_namespace n ON n.oid = c.relnamespace "
+                      "LEFT JOIN pg_policies p "
+                      "  ON p.schemaname = n.nspname AND p.tablename = c.relname "
+                      "WHERE n.nspname = 'analytics_marts' AND c.relname = %s "
+                      "GROUP BY c.relrowsecurity",
+                      (TABLE,),
+                  )
+                  row = cur.fetchone()
+
+          if row is None:
+              sys.exit(f"{TABLE} was not built.")
+          enabled, policies = row
+          print(f"row security: {enabled}, policies: {policies}")
+          if not enabled or policies < 1:
+              sys.exit(
+                  f"{TABLE} rebuilt without its tenant policy. "
+                  "Every tenant would see every tenant's margins."
+              )
+          PY
