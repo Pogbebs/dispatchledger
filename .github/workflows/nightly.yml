@@ -68,6 +68,46 @@ jobs:
       - name: Install dependencies
         run: uv sync --dev
 
+      # A secret that does not exist substitutes as an empty string, silently.
+      # The connection string then becomes postgresql://:@/ -- no host -- and
+      # psycopg reads that as "a local Postgres over a Unix socket", so the
+      # first real step fails with a message about /var/run/postgresql that
+      # has nothing to do with the actual problem. Name the missing secret
+      # instead.
+      - name: Check the secrets are set
+        env:
+          EIA_API_KEY: ${{ secrets.EIA_API_KEY }}
+          NEON_HOST: ${{ secrets.NEON_HOST }}
+          NEON_DATABASE: ${{ secrets.NEON_DATABASE }}
+          ANALYTICS_USER: ${{ secrets.ANALYTICS_USER }}
+          ANALYTICS_PASSWORD: ${{ secrets.ANALYTICS_PASSWORD }}
+        run: |
+          missing=""
+          for name in EIA_API_KEY NEON_HOST NEON_DATABASE ANALYTICS_USER ANALYTICS_PASSWORD; do
+            eval "value=\${$name}"
+            if [ -z "$value" ]; then
+              missing="$missing $name"
+            else
+              echo "$name is set (${#value} characters)"
+            fi
+          done
+          if [ -n "$missing" ]; then
+            echo ""
+            echo "Missing repository secrets:$missing"
+            echo "Settings -> Secrets and variables -> Actions -> New repository secret."
+            echo "Names are case-sensitive and must match exactly."
+            exit 1
+          fi
+          case "$NEON_HOST" in
+            *-pooler*)
+              echo ""
+              echo "NEON_HOST is the pooled endpoint. dbt holds long transactions"
+              echo "and rebuilds tables, which a transaction pooler handles badly."
+              echo "Use the direct endpoint: the same host without -pooler."
+              exit 1
+              ;;
+          esac
+
       # Neon suspends an idle compute and takes a few seconds to wake. Doing
       # that here, where a failure is unambiguous, beats having the first real
       # step fail on a cold start and look like a credentials problem.
