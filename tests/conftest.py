@@ -78,3 +78,29 @@ def order_id_b(tenant_b):
 @pytest.fixture(scope="session")
 def customer_id_b(tenant_b):
     return _first_id(Customer, tenant_b.id)
+
+
+@pytest.fixture(scope="session")
+def customer_a(client, tenant_a) -> dict[str, str]:
+    """A portal login for the first customer of tenant A."""
+    return {"Authorization": f"Bearer {_token(client, tenant_a.slug, 'portal')}"}
+
+
+@pytest.fixture(scope="session")
+def customer_b(client, tenant_b) -> dict[str, str]:
+    return {"Authorization": f"Bearer {_token(client, tenant_b.slug, 'portal')}"}
+
+
+@pytest.fixture(scope="session")
+def customer_a_id(client, customer_a) -> str:
+    """Which customer that login belongs to, read from the server's own answer.
+
+    Taken from /me rather than from the database, so the test depends on the
+    same path the application does.
+    """
+    response = client.get("/me", headers=customer_a)
+    assert response.status_code == 200, response.text
+    customer_id = response.json()["customer_id"]
+    if customer_id is None:
+        pytest.skip("Seeded portal user has no customer; re-run seed.py.")
+    return customer_id

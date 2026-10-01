@@ -216,6 +216,24 @@ def seed_tenant(
 
     session.flush()
 
+    # --- a portal login for the first customer ---
+    #
+    # One demo account so the customer-facing side can be signed into without
+    # first walking the invitation flow. Everything it can see is decided by
+    # the restrictive policy on dispatch_portal, not by this row: it belongs to
+    # customers[0] and therefore sees customers[0]'s orders and nothing else.
+    session.add(
+        User(
+            tenant_id=tenant.id,
+            email=f"portal@{slug}.example.com",
+            full_name=fake.name(),
+            role="customer",
+            customer_id=customers[0].id,
+            password_hash=DEMO_HASH,
+        )
+    )
+    session.flush()
+
     # --- six months of orders, deliveries and invoices ---
     invoice_seq = 1000
     today = date.today()
@@ -256,6 +274,7 @@ def seed_tenant(
                 Delivery(
                     tenant_id=tenant.id,
                     order_id=order.id,
+                    customer_id=order.customer_id,
                     driver_id=random.choice(drivers).id,
                     scheduled_at=datetime.combine(
                         requested, datetime.min.time(), tzinfo=timezone.utc
@@ -280,6 +299,7 @@ def seed_tenant(
         delivery = Delivery(
             tenant_id=tenant.id,
             order_id=order.id,
+            customer_id=order.customer_id,
             driver_id=random.choice(drivers).id,
             scheduled_at=scheduled_at,
             delivered_at=delivered_at,

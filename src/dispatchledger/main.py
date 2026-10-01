@@ -6,15 +6,17 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 
 from dispatchledger.config import REPO_ROOT
-from dispatchledger.db import admin_engine, app_engine
+from dispatchledger.db import admin_engine, app_engine, portal_engine
 from dispatchledger.routers import (
     auth,
     catalog,
     customers,
     deliveries,
     insights,
+    invites,
     invoices,
     orders,
+    portal,
 )
 
 app = FastAPI(
@@ -34,6 +36,11 @@ app.include_router(deliveries.router)
 app.include_router(catalog.router)
 app.include_router(invoices.router)
 app.include_router(insights.router)
+app.include_router(invites.router)
+# The portal's routes live under /portal and run on a third database role.
+# Registered like any other router: the separation that matters is the role it
+# connects as, not where the code sits.
+app.include_router(portal.router)
 
 
 @app.get("/health", tags=["ops"])
@@ -45,12 +52,17 @@ def health() -> dict[str, str]:
     restart on a failing health check, and they can only do that if the check
     is capable of failing.
 
-    Both engines are tried because both are on the request path: every
-    handler uses the application role, and the login endpoint uses the owner
-    role to find a tenant before any tenant is known. Either being down means
-    the service is not usable, so either failing means unhealthy.
+    All three engines are tried because all three are on the request path:
+    staff handlers use the application role, the login endpoint uses the owner
+    role to find a tenant before any tenant is known, and the portal uses the
+    restricted customer role. Any of them being down means some part of the
+    service cannot serve a request, so any of them failing means unhealthy.
     """
-    for name, engine in (("app", app_engine), ("admin", admin_engine)):
+    for name, engine in (
+        ("app", app_engine),
+        ("admin", admin_engine),
+        ("portal", portal_engine),
+    ):
         try:
             with engine.connect() as connection:
                 connection.execute(text("SELECT 1"))

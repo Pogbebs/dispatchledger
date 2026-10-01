@@ -32,6 +32,7 @@ jobs:
     env:
       DATABASE_URL: postgresql+psycopg://dispatch:dispatch@localhost:5433/dispatchledger
       APP_DATABASE_URL: postgresql+psycopg://dispatch_app:dispatch_app@localhost:5433/dispatchledger
+      PORTAL_DATABASE_URL: postgresql+psycopg://dispatch_portal:dispatch_portal@localhost:5433/dispatchledger
       JWT_SECRET: ci-only-secret-never-used-outside-this-runner
       DBT_HOST: localhost
       DBT_PORT: "5433"

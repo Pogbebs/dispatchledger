@@ -64,20 +64,35 @@ class Tenant(IdMixin, TimestampMixin, Base):
 
 
 class User(TenantScopedMixin, Base):
-    """A person who logs in: admin, dispatcher, or driver."""
+    """A person who logs in: admin, dispatcher, driver, or customer."""
 
     __tablename__ = "users"
     __table_args__ = (
         # Email is unique within a tenant, not globally: the same person may
         # work for two distributors that both use the platform.
         UniqueConstraint("tenant_id", "email", name="uq_users_tenant_email"),
-        CheckConstraint("role IN ('admin', 'dispatcher', 'driver')", name="ck_users_role"),
+        CheckConstraint(
+            "role IN ('admin', 'dispatcher', 'driver', 'customer')",
+            name="ck_users_role",
+        ),
+        # Staff have no customer; a customer user must have one. Stating it
+        # as a constraint means the pair cannot drift apart, whichever
+        # handler happens to be writing the row.
+        CheckConstraint(
+            "(role = 'customer') = (customer_id IS NOT NULL)",
+            name="ck_users_customer_role",
+        ),
     )
 
     email: Mapped[str] = mapped_column(String(255))
     full_name: Mapped[str] = mapped_column(String(200))
     role: Mapped[str] = mapped_column(String(20))
     password_hash: Mapped[str] = mapped_column(Text)
+    # Null for staff. For a customer user, the company they belong to -- and
+    # the value that ends up in app.current_customer on every request.
+    customer_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("customers.id"), index=True, nullable=True
+    )
 
 
 class Customer(TenantScopedMixin, Base):
@@ -157,6 +172,10 @@ class Delivery(TenantScopedMixin, Base):
     )
 
     order_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("orders.id"), index=True)
+    # Denormalised from the order, exactly as tenant_id is denormalised
+    # everywhere: the portal's row-security policy compares this column, and a
+    # policy that had to reach into orders would run a subquery per row.
+    customer_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("customers.id"), index=True)
     driver_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"), index=True)
     scheduled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -184,3 +203,26 @@ class Invoice(TenantScopedMixin, Base):
     amount: Mapped[Decimal] = mapped_column(Numeric(12, 2))
     status: Mapped[str] = mapped_column(String(20), server_default="unpaid")
     paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class CustomerInvite(TenantScopedMixin, Base):
+    """A pending invitation for a customer to create a portal login.
+
+    A customer cannot sign themselves up. The relationship between a
+    distributor and a customer is created by the distributor, so an account is
+    provisioned rather than claimed -- otherwise anyone could insert
+    themselves into a tenant's customer book.
+
+    Only the hash of the token is stored. Until it is used, the link in the
+    invitation email is a credential, and a table of live credentials in
+    plaintext is the thing this project exists to argue against.
+    """
+
+    __tablename__ = "customer_invites"
+
+    customer_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("customers.id"), index=True)
+    email: Mapped[str] = mapped_column(String(255))
+    full_name: Mapped[str] = mapped_column(String(200))
+    token_hash: Mapped[str] = mapped_column(Text, unique=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

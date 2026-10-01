@@ -36,6 +36,10 @@ class MeOut(UserOut):
     tenant_id: uuid.UUID
     tenant_name: str
     tenant_slug: str
+    # Present only for a customer login. The web app branches on this to
+    # decide which application it is showing.
+    customer_id: uuid.UUID | None = None
+    customer_name: str | None = None
 
 
 # ---------- customers ----------
@@ -239,3 +243,109 @@ class InvoiceSummary(BaseModel):
 class InvoicesOut(BaseModel):
     rows: list[InvoiceRow]
     summary: InvoiceSummary
+
+
+# ---------- the customer portal ----------
+
+class InviteCreate(BaseModel):
+    """What a dispatcher supplies to invite a customer contact."""
+
+    customer_id: uuid.UUID
+    email: EmailStr
+    full_name: str = Field(min_length=1, max_length=200)
+    expires_in_days: int = Field(default=7, ge=1, le=30)
+
+
+class InviteOut(BaseModel):
+    """The response carries the token exactly once.
+
+    Only its hash is stored, so this is the only moment the plaintext exists
+    anywhere. The dispatcher copies the link from here; nothing can show it
+    again, which is the property that makes the stored row harmless.
+    """
+
+    id: uuid.UUID
+    customer_id: uuid.UUID
+    email: EmailStr
+    full_name: str
+    expires_at: datetime
+    accept_path: str
+
+
+class InviteRow(BaseModel):
+    """An invitation as the staff list shows it. No token, ever."""
+
+    model_config = ORM
+    id: uuid.UUID
+    customer_id: uuid.UUID
+    customer_name: str
+    email: EmailStr
+    full_name: str
+    expires_at: datetime
+    accepted_at: datetime | None
+    status: str
+
+
+class AcceptInviteRequest(BaseModel):
+    token: str = Field(min_length=20, max_length=200)
+    password: str = Field(min_length=8, max_length=200)
+
+
+class PortalOrderCreate(BaseModel):
+    """A customer placing their own order.
+
+    No customer_id: it comes from the token. There is deliberately no field
+    here for a client to set, which is the same reason no endpoint takes a
+    tenant id.
+    """
+
+    site_id: uuid.UUID
+    product_id: uuid.UUID
+    quantity_gal: Decimal = Field(gt=0, le=Decimal("100000"))
+    requested_date: date
+
+
+class PortalOrderRow(BaseModel):
+    """What the customer sees of their own order.
+
+    unit_price is included because it is the price they agreed to pay. What is
+    absent is anything about the distributor's position on that price -- cost,
+    margin, benchmark. Those live in the Insights mart, which this role has no
+    grant on at all.
+    """
+
+    model_config = ORM
+    id: uuid.UUID
+    site_address: str
+    product_name: str
+    quantity_gal: Decimal
+    unit_price: Decimal
+    status: str
+    requested_date: date
+    scheduled_at: datetime | None
+    delivered_at: datetime | None
+    delivered_gal: Decimal | None
+
+
+class PortalInvoiceRow(BaseModel):
+    model_config = ORM
+    id: uuid.UUID
+    invoice_number: str
+    issued_at: date
+    due_date: date
+    amount: Decimal
+    status: str
+    paid_at: datetime | None
+    days_overdue: int
+
+
+class PortalSummary(BaseModel):
+    open_orders: int
+    scheduled_deliveries: int
+    outstanding_total: Decimal
+    overdue_total: Decimal
+
+
+class PortalOverview(BaseModel):
+    summary: PortalSummary
+    orders: list[PortalOrderRow]

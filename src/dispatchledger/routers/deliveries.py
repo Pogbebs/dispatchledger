@@ -97,6 +97,9 @@ def schedule_delivery(
     delivery = Delivery(
         tenant_id=user.tenant_id,
         order_id=order.id,
+        # Copied from the order so the portal's row-security policy can
+        # compare a column rather than run a subquery per row.
+        customer_id=order.customer_id,
         driver_id=_validated_driver(session, payload.driver_id),
         scheduled_at=payload.scheduled_at,
         status="scheduled",

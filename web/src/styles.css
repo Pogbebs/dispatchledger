@@ -545,3 +545,65 @@ tbody tr:hover {
   font-size: 13px;
   color: var(--muted);
 }
+
+/* ---------- inline panel: a form that opens inside a card ---------- */
+/* Used by the portal's order form and by the invite form. Wraps rather than
+   scrolls, because unlike a row-level form this one owns the full width. */
+
+.inline-panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: flex-end;
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.inline-panel label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+.inline-panel input,
+.inline-panel select {
+  min-width: 170px;
+}
+
+.inline-panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
+
+/* ---------- a notice that has to be dismissed ---------- */
+/* For the invitation link: it is shown exactly once, so it must not fade on
+   its own while the dispatcher is looking somewhere else. */
+
+.notice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--surface-2);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+
+.invite-link {
+  display: block;
+  margin-top: 8px;
+  font-family: var(--mono);
+  font-size: 12px;
+  word-break: break-all;
+  color: var(--accent);
+}

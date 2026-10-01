@@ -73,10 +73,74 @@ export interface Me {
   id: string;
   email: string;
   full_name: string;
-  role: "admin" | "dispatcher" | "driver";
+  role: "admin" | "dispatcher" | "driver" | "customer";
   tenant_id: string;
   tenant_name: string;
   tenant_slug: string;
+  /** Set only for a customer login. The app branches on this to decide
+   *  whether it is showing the staff platform or the portal. */
+  customer_id: string | null;
+  customer_name: string | null;
+}
+
+// ---------- the customer portal ----------
+
+export interface PortalOrderRow {
+  id: string;
+  site_address: string;
+  product_name: string;
+  quantity_gal: string;
+  unit_price: string;
+  status: string;
+  requested_date: string;
+  scheduled_at: string | null;
+  delivered_at: string | null;
+  delivered_gal: string | null;
+}
+
+export interface PortalInvoiceRow {
+  id: string;
+  invoice_number: string;
+  issued_at: string;
+  due_date: string;
+  amount: string;
+  status: string;
+  paid_at: string | null;
+  days_overdue: number;
+}
+
+export interface PortalSummary {
+  open_orders: number;
+  scheduled_deliveries: number;
+  outstanding_total: string;
+  overdue_total: string;
+}
+
+export interface PortalOverview {
+  summary: PortalSummary;
+  orders: PortalOrderRow[];
+}
+
+export interface InviteRow {
+  id: string;
+  customer_id: string;
+  customer_name: string;
+  email: string;
+  full_name: string;
+  expires_at: string;
+  accepted_at: string | null;
+  status: "pending" | "accepted" | "expired";
+}
+
+/** The token is in this response and nowhere else -- only its hash is
+ *  stored, so the link cannot be retrieved later. */
+export interface InviteCreated {
+  id: string;
+  customer_id: string;
+  email: string;
+  full_name: string;
+  expires_at: string;
+  accept_path: string;
 }
 
 export interface Customer {
@@ -283,4 +347,54 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ delivered_gal }),
     }),
+
+  // ---------- staff: invitations ----------
+
+  invites: () => request<InviteRow[]>("/invites"),
+
+  createInvite: (body: {
+    customer_id: string;
+    email: string;
+    full_name: string;
+    expires_in_days?: number;
+  }) => request<InviteCreated>("/invites", {
+    method: "POST",
+    body: JSON.stringify(body),
+  }),
+
+  revokeInvite: (id: string) =>
+    request<void>(`/invites/${id}`, { method: "DELETE" }),
+
+  // ---------- the portal ----------
+  //
+  // Every one of these runs on a different database role than the staff calls
+  // above. Nothing here passes a customer id: it travels in the token, so
+  // there is no parameter for a client to change.
+
+  acceptInvite: (token: string, password: string) =>
+    request<{ access_token: string }>("/invites/accept", {
+      method: "POST",
+      body: JSON.stringify({ token, password }),
+    }),
+
+  portalOverview: () => request<PortalOverview>("/portal/overview"),
+
+  portalSites: () => request<Site[]>("/portal/sites"),
+
+  portalProducts: () => request<Product[]>("/portal/products"),
+
+  portalPlaceOrder: (body: {
+    site_id: string;
+    product_id: string;
+    quantity_gal: string;
+    requested_date: string;
+  }) => request<{ id: string }>("/portal/orders", {
+    method: "POST",
+    body: JSON.stringify(body),
+  }),
+
+  portalCancelOrder: (id: string) =>
+    request<{ id: string }>(`/portal/orders/${id}/cancel`, { method: "POST" }),
+
+  portalInvoices: () => request<PortalInvoiceRow[]>("/portal/invoices"),
 };

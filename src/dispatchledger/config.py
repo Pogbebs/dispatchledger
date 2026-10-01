@@ -61,6 +61,20 @@ APP_DATABASE_URL = os.getenv(
     "postgresql+psycopg://dispatch_app:dispatch_app@localhost:5433/dispatchledger",
 )
 
+# The customer portal connects as dispatch_portal, which carries a restrictive
+# policy scoped to one customer on top of the tenant policy. It is the most
+# constrained login in the system, because it is the only one reachable by
+# someone outside the distributor.
+#
+# Falls back to the application role when unset, so a deployment that has not
+# run the portal migration still starts. The portal's own endpoints check which
+# role they got and refuse to serve on the wrong one, rather than quietly
+# running a customer's request with staff-wide visibility.
+PORTAL_DATABASE_URL = os.getenv(
+    "PORTAL_DATABASE_URL",
+    "postgresql+psycopg://dispatch_portal:dispatch_portal@localhost:5433/dispatchledger",
+)
+
 # The owner role. Used ONLY by the login endpoint, which has to find a tenant
 # and a user before any tenant is known, and by migrations and seeding.
 ADMIN_DATABASE_URL = os.getenv(
