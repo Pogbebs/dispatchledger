@@ -6,22 +6,6 @@ Dispatchledger is multi-tenant data and operations platform for fuel and bulk-li
 
 Dispatchjledger is designed as a multi-tenant SaaS application, meaning multiple companies can use the same system while their data remains securely separated. Instead of relying on developers to remember to filter every query by company, it enforces a boundary inside the PostgreSQL database using Row-Level Security (RLS),rather than relying solely on application-level WHERE tenant_id = ... filters.
 
-     Distributor A ─┐
-                    │
-     Distributor B ─┼──→ Dispatchledger
-                    │         ↓
-     Distributor C ─┘    PostgreSQL
-                           │  RLS
-                           ↓
-                    Operational Data
-                           ↓
-                    Nightly Pipeline
-                           ↓
-                          dbt
-                           ↓
-                    Analytics Warehouse
-                           ↓
-                    BI / Reporting
 
 ### Live demo
 
