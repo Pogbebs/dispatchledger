@@ -2,9 +2,26 @@
 
 [![CI](https://github.com/Pogbebs/dispatchledger/actions/workflows/ci.yml/badge.svg)](https://github.com/Pogbebs/dispatchledger/actions/workflows/ci.yml)
 
-A multi-tenant operations platform for fuel and bulk-liquid distributors — customers, delivery sites, orders, deliveries and invoicing — with every company's data isolated inside the database itself, and a nightly pipeline turning the operational record into a tested warehouse.
+Dispatchledger is multi-tenant data and operations platform for fuel and bulk-liquid distributors. it allows each companies its fuel orders, delivery locations, customers, and invoicing  in one system, while a nightly data pipeline transforms operational data into a tested analytics warehouse for reporting and business intelligence.
 
-Built to answer the question that defines multi-tenant SaaS: **how do you guarantee one customer can never see another's data?** The answer here is Postgres row-level security rather than a `WHERE` clause developers have to remember.
+Dispatchjledger is designed as a multi-tenant SaaS application, meaning multiple companies can use the same system while their data remains securely separated. Instead of relying on developers to remember to filter every query by company, it enforces a boundary inside the PostgreSQL database using Row-Level Security (RLS),rather than relying solely on application-level WHERE tenant_id = ... filters.
+
+     Distributor A ─┐
+                    │
+     Distributor B ─┼──→ Dispatchledger
+                    │         ↓
+     Distributor C ─┘    PostgreSQL
+                           │  RLS
+                           ↓
+                    Operational Data
+                           ↓
+                    Nightly Pipeline
+                           ↓
+                          dbt
+                           ↓
+                    Analytics Warehouse
+                           ↓
+                    BI / Reporting
 
 ### Live demo
 

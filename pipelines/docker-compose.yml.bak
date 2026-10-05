@@ -8,10 +8,6 @@
 # Airflow's metadata database is separate from the application's on purpose.
 # Sharing one would couple the pipeline's uptime to the product's, and a
 # scheduler under load would compete with customer traffic.
-#
-# This Airflow also runs the sentinel_batch DAG from the Sentinel Lakehouse
-# project, so every personal pipeline shows up in one UI. Sentinel's own stack
-# must be running first: it creates the sentinel-net network joined below.
 
 x-airflow-common: &airflow-common
   build: .
@@ -20,7 +16,7 @@ x-airflow-common: &airflow-common
     AIRFLOW__CORE__LOAD_EXAMPLES: "false"
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-db:5432/airflow
     AIRFLOW__API__SECRET_KEY: ${AIRFLOW_SECRET_KEY:-dev-only-change-me}
-    # Airflow 3 tasks report state back through the Task Execution API. The
+        # Airflow 3 tasks report state back through the Task Execution API. The
     # default points at localhost, which inside the scheduler container is
     # not the api-server -- so tasks start, fail to call home, and die before
     # writing any log.
@@ -29,12 +25,6 @@ x-airflow-common: &airflow-common
     # all use the same one.
     AIRFLOW__API_AUTH__JWT_SECRET: ${AIRFLOW_SECRET_KEY:-dev-only-change-me}
     AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY:-}
-    # Airflow 3's default login (SimpleAuthManager) generates a random admin
-    # password inside the container, so every rebuild silently changed it. The
-    # passwords file now lives in ./config on the host, where admin/admin is set
-    # and survives rebuilds. Local development only.
-    AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_USERS: admin:admin
-    AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_PASSWORDS_FILE: /opt/airflow/config/simple_auth_manager_passwords.json
     # Where the DAG's BashOperator finds dbt and the project.
     DBT_PROJECT_DIR: /opt/airflow/analytics
     DBT_BIN: /opt/dbt_venv/bin/dbt
@@ -50,26 +40,14 @@ x-airflow-common: &airflow-common
   volumes:
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs
-    - ./config:/opt/airflow/config
     # The dbt project is mounted rather than copied, so editing a model does
     # not mean rebuilding the image.
     - ../analytics:/opt/airflow/analytics
-    # Sentinel Lakehouse: its source and dbt project at /opt/sentinel (where
-    # the DAG looks by default), and its DAG folder as a subfolder of dags/,
-    # which Airflow scans recursively. Set SENTINEL_LAKEHOUSE_DIR in .env if the
-    # repo lives somewhere else.
-    - ${SENTINEL_LAKEHOUSE_DIR:-C:/Users/POgbebor.GOODWILLHOUSTON/Desktop/sentinel-lakehouse}:/opt/sentinel
-    - ${SENTINEL_LAKEHOUSE_DIR:-C:/Users/POgbebor.GOODWILLHOUSTON/Desktop/sentinel-lakehouse}/airflow/dags:/opt/airflow/dags/sentinel:ro
   user: "${AIRFLOW_UID:-50000}:0"
   extra_hosts:
     # Lets the containers reach dispatch-db, which runs outside this compose
     # project, without putting them on the same network.
     - "host.docker.internal:host-gateway"
-  networks:
-    - default
-    # Sentinel's services (object store "s3", "postgres") are reachable by
-    # name on this network, which is what the sentinel_batch DAG expects.
-    - sentinel-net
   depends_on:
     airflow-db:
       condition: service_healthy
@@ -149,8 +127,3 @@ services:
 
 volumes:
   airflow-db-data:
-
-networks:
-  # Created by the Sentinel Lakehouse stack (docker compose up in that repo).
-  sentinel-net:
-    external: true

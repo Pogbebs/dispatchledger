@@ -7,8 +7,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends git \
 # /opt is root-owned, so the venv directory has to be created and handed to
 # the airflow user before dropping privileges. Building it as root instead
 # would leave a venv the airflow user cannot write to.
-RUN mkdir -p /opt/dbt_venv /opt/sentinel-venv \
-    && chown airflow: /opt/dbt_venv /opt/sentinel-venv
+RUN mkdir -p /opt/dbt_venv && chown airflow: /opt/dbt_venv
 
 USER airflow
 
@@ -23,18 +22,5 @@ RUN python -m venv /opt/dbt_venv \
     && /opt/dbt_venv/bin/pip install --no-cache-dir "dbt-postgres==1.11.0" \
     && /opt/dbt_venv/bin/dbt --version
 
-# Sentinel Lakehouse gets a virtualenv of its own, for the same reason: its dbt
-# runs on DuckDB, not Postgres, and keeping it separate means neither project's
-# dependency upgrades can break the other. The sentinel_batch DAG calls only
-# /opt/sentinel-venv/bin/*; the sentinel code is mounted, not installed.
-RUN python -m venv /opt/sentinel-venv \
-    && /opt/sentinel-venv/bin/pip install --no-cache-dir \
-         "dbt-core>=1.10" "dbt-duckdb>=1.9" "duckdb>=1.1" "psycopg2-binary>=2.9" \
-    && /opt/sentinel-venv/bin/dbt --version \
-    # DuckDB downloads extensions on first use; doing it here means tasks never
-    # depend on network access at run time.
-    && /opt/sentinel-venv/bin/python -c \
-         "import duckdb; duckdb.connect().execute('install httpfs; install delta')"
-
 # psycopg is for the loader task, which runs in Airflow's own interpreter.
-RUN pip install --no-cache-dir "psycopg[binary]==3.3.6" "requests==2.32.5"
+RUN pip install --no-cache-dir "psycopg[binary]==3.3.6" "requests==2.32.5" 
