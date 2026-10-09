@@ -1,32 +1,104 @@
+/*
+  DispatchLedger — the look of a dispatch board.
+
+  The reference is not a SaaS dashboard. It is the paperwork and signage of a
+  fuel terminal: ruled bills of lading, placards on a tanker door, gauge
+  faces. Three rules follow from that and explain most of what is below.
+
+  1. Rules, not shadows. Panels are bounded by hairlines and tint changes.
+     Nothing floats, because nothing on a printed manifest floats, and a
+     screen full of soft drop shadows is the house style of every admin
+     template ever generated.
+  2. Colour means status and nothing else. The interface is concrete, paper
+     and ink. The moment something is coloured it is because it is pending,
+     late, or done -- so colour is readable across a desk rather than
+     decorative.
+  3. Figures are monospaced. Gallons and dollars stack in columns and have to
+     align on the digit. Labels are not monospaced; that would be costume.
+*/
+
 :root {
-  --bg: #f6f7f9;
-  --surface: #ffffff;
-  --surface-2: #f0f2f5;
-  --border: #dfe3e8;
-  --text: #16202c;
-  --muted: #61708a;
-  --accent: #1f5f8b;
-  --accent-text: #ffffff;
-  --danger: #a4332b;
-  --ok: #1d6f42;
-  --warn: #8a6100;
-  --radius: 8px;
-  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  /* Concrete and paper. Cool, because a warm cream page with a serif is the
+     look every generated design arrives at, and this is a yard, not a
+     stationery shop. */
+  --paper: #eceeec;
+  --panel: #fbfcfb;
+  --panel-2: #f0f2f1;
+  --rule: #c9d0d2;
+  --rule-strong: #9aa6aa;
+
+  --ink: #13202a;
+  --muted: #5c6f77;
+
+  /* Petrol: diesel-stained steel, terminal signage, the one structural
+     accent in the system. */
+  --petrol: #0c5c63;
+  --petrol-ink: #ffffff;
+  --petrol-soft: #d9e6e6;
+
+  /* Status. Each of these appears only on a placard or a figure. */
+  --pending: #8a5200;
+  --pending-soft: #f6e8d2;
+  --moving: #0c5c63;
+  --moving-soft: #d9e6e6;
+  --done: #1f6b43;
+  --done-soft: #d8e9df;
+  --late: #9d2f23;
+  --late-soft: #f4dedb;
+  --dormant: #6b767a;
+  --dormant-soft: #e4e7e7;
+
+  --danger: #9d2f23;
+  --ok: #1f6b43;
+  --warn: #8a5200;
+  --accent: var(--petrol);
+  --accent-text: var(--petrol-ink);
+  --bg: var(--paper);
+  --surface: var(--panel);
+  --surface-2: var(--panel-2);
+  --border: var(--rule);
+  --text: var(--ink);
+
+  /* Native date pickers, scrollbars and spin buttons follow the theme
+     instead of staying stubbornly light inside a dark panel. */
+  color-scheme: light;
+
+  --radius: 3px;
+  --sans: "Archivo", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Menlo, monospace;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #11151b;
-    --surface: #171c24;
-    --surface-2: #1e252f;
-    --border: #2b3542;
-    --text: #e6ebf2;
-    --muted: #93a1b5;
-    --accent: #4d9ed1;
-    --accent-text: #0b0f14;
-    --danger: #e0756b;
-    --ok: #6cc08a;
-    --warn: #d6a84a;
+    --paper: #0e1517;
+    --panel: #141d20;
+    --panel-2: #1a2529;
+    --rule: #28363b;
+    --rule-strong: #3d5157;
+
+    --ink: #dde5e6;
+    --muted: #87999e;
+
+    --petrol: #2f9aa2;
+    --petrol-ink: #06191b;
+    --petrol-soft: #163034;
+
+    --pending: #d6a14a;
+    --pending-soft: #30250f;
+    --moving: #2f9aa2;
+    --moving-soft: #10292c;
+    --done: #5cb482;
+    --done-soft: #112a1e;
+    --late: #e07a6c;
+    --late-soft: #2e1512;
+    --dormant: #7d8c90;
+    --dormant-soft: #1c2629;
+
+    --danger: #e07a6c;
+    --ok: #5cb482;
+    --warn: #d6a14a;
+
+    color-scheme: dark;
   }
 }
 
@@ -36,19 +108,49 @@
 
 body {
   margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  font-size: 15px;
-  line-height: 1.5;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Every figure in the application, wherever it appears. tabular-nums keeps
+   a column of gallons from shifting as the digits change. */
+.num,
+.mono,
+input[type="number"],
+input[type="date"],
+.stat-value,
+.invite-link,
+code {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+:focus-visible {
+  outline: 2px solid var(--petrol);
+  outline-offset: 2px;
+}
+
+h1 {
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  margin: 0;
+}
+
+.subtle {
+  color: var(--muted);
 }
 
 /* ---------- shell ---------- */
 
 .header {
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  padding: 0 24px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--rule-strong);
+  padding: 0 20px;
   position: sticky;
   top: 0;
   z-index: 10;
@@ -59,12 +161,13 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 14px 0 10px;
+  padding: 12px 0 10px;
 }
 
 .brand {
-  font-weight: 650;
-  letter-spacing: -0.01em;
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: 0.01em;
 }
 
 .brand span {
@@ -73,23 +176,34 @@ body {
   margin-left: 10px;
 }
 
+/*
+  The company plate.
+
+  This is the one place the design raises its voice, and it earns it: in a
+  multi-tenant system the single most important thing on screen is whose data
+  you are looking at. Modelled on the plate bolted to a tanker door -- solid
+  block, square corners, set tight. Nothing else in the interface is a solid
+  field of colour, so it reads instantly even in peripheral vision.
+*/
 .tenant-badge {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 4px 12px;
+  background: var(--petrol);
+  color: var(--petrol-ink);
+  border-radius: 2px;
+  padding: 5px 11px 4px;
   font-size: 13px;
   font-weight: 600;
+  letter-spacing: 0.01em;
 }
 
 .tenant-badge .dot {
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  background: var(--accent);
+  background: currentColor;
+  opacity: 0.65;
 }
 
 .header-right {
@@ -102,27 +216,33 @@ body {
 
 .nav {
   display: flex;
-  gap: 4px;
+  gap: 2px;
 }
 
 .nav a {
   color: var(--muted);
   text-decoration: none;
-  padding: 8px 12px;
+  padding: 7px 12px 8px;
   border-bottom: 2px solid transparent;
   font-size: 14px;
+  font-weight: 500;
+}
+
+.nav a:hover {
+  color: var(--ink);
+  background: var(--panel-2);
 }
 
 .nav a.active {
-  color: var(--text);
-  border-bottom-color: var(--accent);
+  color: var(--ink);
+  border-bottom-color: var(--petrol);
   font-weight: 600;
 }
 
 .page {
   max-width: 1320px;
   margin: 0 auto;
-  padding: 24px 24px 64px;
+  padding: 22px 20px 64px;
 }
 
 .page-head {
@@ -130,82 +250,28 @@ body {
   align-items: baseline;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
   flex-wrap: wrap;
 }
 
-h1 {
-  font-size: 20px;
-  margin: 0;
-  letter-spacing: -0.01em;
+.page-head .subtle {
+  font-size: 13px;
 }
 
-.subtle {
-  color: var(--muted);
+/* The session is unconfirmed but not rejected. Stated plainly rather than
+   dressed up as an error, because nothing is wrong with the person's
+   session -- the server simply has not answered yet. */
+.reconnecting {
+  background: var(--pending-soft);
+  color: var(--pending);
+  border-bottom: 1px solid var(--rule);
   font-size: 13px;
+  font-weight: 500;
+  padding: 7px 20px;
+  text-align: center;
 }
 
 /* ---------- controls ---------- */
-
-button,
-select,
-input {
-  font: inherit;
-  color: inherit;
-}
-
-.btn {
-  background: var(--accent);
-  color: var(--accent-text);
-  border: 1px solid transparent;
-  border-radius: var(--radius);
-  padding: 8px 14px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.btn:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.btn-quiet {
-  background: var(--surface);
-  color: var(--text);
-  border-color: var(--border);
-  font-weight: 500;
-}
-
-.btn-sm {
-  padding: 4px 10px;
-  font-size: 13px;
-}
-
-input,
-select {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 8px 10px;
-  width: 100%;
-}
-
-input:focus,
-select:focus {
-  outline: 2px solid var(--accent);
-  outline-offset: -1px;
-}
-
-label {
-  display: block;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--muted);
-  margin-bottom: 4px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
 
 .filters {
   display: flex;
@@ -218,15 +284,77 @@ label {
   min-width: 150px;
 }
 
-/* ---------- table ---------- */
+.btn {
+  background: var(--petrol);
+  color: var(--petrol-ink);
+  border: 1px solid var(--petrol);
+  border-radius: 2px;
+  padding: 7px 14px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+}
 
+.btn:hover:not(:disabled) {
+  filter: brightness(1.12);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Outlined rather than filled: a secondary action should not compete with
+   the one the dispatcher came to the row to do. */
+.btn-quiet {
+  background: transparent;
+  color: var(--ink);
+  border-color: var(--rule-strong);
+}
+
+.btn-quiet:hover:not(:disabled) {
+  background: var(--panel-2);
+  border-color: var(--ink);
+  filter: none;
+}
+
+.btn-sm {
+  padding: 3px 9px;
+  font-size: 12px;
+}
+
+input,
+select {
+  background: var(--panel);
+  color: var(--ink);
+  border: 1px solid var(--rule-strong);
+  border-radius: 2px;
+  padding: 6px 9px;
+  font-family: inherit;
+  font-size: 13px;
+  width: 100%;
+}
+
+input:read-only {
+  background: var(--panel-2);
+  color: var(--muted);
+}
+
+/* ---------- panels and tables ---------- */
+
+/*
+  A panel, not a card. One hairline, square-ish corners, no shadow. The
+  separation between a panel and the page comes from the rule and the tint,
+  the way a boxed section on a printed form does.
+*/
 .card {
-  background: var(--surface);
-  border: 1px solid var(--border);
+  background: var(--panel);
+  border: 1px solid var(--rule);
   border-radius: var(--radius);
-  /* auto, never hidden. A table that outgrows the card should offer a
-     scrollbar; hidden silently amputates the last column instead, which is
-     exactly how the Cancel button disappeared when Schedule was added. */
+  /* auto, never hidden. A table that outgrows the panel should offer a
+     scrollbar; hidden silently amputates the last column instead. */
   overflow-x: auto;
 }
 
@@ -235,21 +363,28 @@ table {
   border-collapse: collapse;
 }
 
+/*
+  Uppercase column heads are the one place caps belong: this is a ledger, and
+  a ruled band of small caps over a column of figures is how every manifest
+  and weigh ticket in the trade is set. They are not used as decorative
+  eyebrows anywhere else.
+*/
 th {
   text-align: left;
-  font-size: 11px;
+  font-size: 10.5px;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.07em;
   color: var(--muted);
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface-2);
+  padding: 8px 12px;
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--rule-strong);
   white-space: nowrap;
 }
 
 td {
-  padding: 11px 14px;
-  border-bottom: 1px solid var(--border);
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--rule);
   vertical-align: middle;
 }
 
@@ -258,14 +393,17 @@ tbody tr:last-child td {
 }
 
 tbody tr:hover {
-  background: var(--surface-2);
+  background: var(--panel-2);
 }
 
 .num {
-  font-family: var(--mono);
-  font-size: 13px;
   text-align: right;
+  font-size: 13px;
   white-space: nowrap;
+}
+
+th.num {
+  text-align: right;
 }
 
 .truncate {
@@ -275,208 +413,224 @@ tbody tr:hover {
   white-space: nowrap;
 }
 
-/* ---------- status pills ---------- */
+/* Shrink-to-fit, never wrapped. */
+.cell-actions {
+  width: 1%;
+  white-space: nowrap;
+  text-align: right;
+}
 
+/* ---------- placards ---------- */
+
+/*
+  Status as a placard, not a pill.
+
+  A rounded pastel capsule says nothing about what kind of system this is. A
+  placard -- square, ruled, with a colour bar down its leading edge -- is the
+  vernacular of the trade, and the bar does real work: it is the part you can
+  pick out when scanning a column of forty rows without reading a word.
+*/
 .pill {
   display: inline-block;
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  padding: 3px 8px;
-  border-radius: 999px;
-  border: 1px solid currentColor;
+  letter-spacing: 0.06em;
+  padding: 3px 8px 2px;
+  border-radius: 2px;
+  border: 1px solid transparent;
+  border-left-width: 3px;
   white-space: nowrap;
 }
 
-.pill-pending { color: var(--warn); }
-.pill-scheduled { color: var(--accent); }
-.pill-in_transit { color: var(--accent); }
-.pill-delivered { color: var(--ok); }
-.pill-completed { color: var(--ok); }
-.pill-cancelled { color: var(--muted); }
-.pill-failed { color: var(--danger); }
+.pill-pending {
+  color: var(--pending);
+  background: var(--pending-soft);
+  border-color: var(--pending);
+}
+
+.pill-scheduled,
+.pill-in_transit,
+.pill-unpaid {
+  color: var(--moving);
+  background: var(--moving-soft);
+  border-color: var(--moving);
+}
+
+.pill-delivered,
+.pill-completed,
+.pill-paid {
+  color: var(--done);
+  background: var(--done-soft);
+  border-color: var(--done);
+}
+
+.pill-failed {
+  color: var(--late);
+  background: var(--late-soft);
+  border-color: var(--late);
+}
+
+.pill-cancelled,
+.pill-void {
+  color: var(--dormant);
+  background: var(--dormant-soft);
+  border-color: var(--dormant);
+}
+
+/* ---------- figures ---------- */
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+/*
+  A gauge face: label above, figure large, note beneath. The left rule ties
+  the group together without drawing four separate boxes, which is what makes
+  a row of identical rounded cards look like a template.
+*/
+.stat {
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--rule-strong);
+  border-radius: var(--radius);
+  padding: 11px 14px 12px;
+}
+
+.stat-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+}
+
+.stat-value {
+  font-size: 23px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin-top: 3px;
+  line-height: 1.15;
+}
+
+.stat-note {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+/*
+  The left rule takes the colour of what the figure says.
+  
+  Without this it is four identical bars and pure decoration, which is the
+  thing a row of cards always degrades into. With it, the panel that needs
+  attention is findable before any of the numbers are read -- the same job
+  the placard does in a table row, at the scale of a summary.
+*/
+.stat:has(.down) { border-left-color: var(--late); }
+.stat:has(.up) { border-left-color: var(--done); }
+
+.up { color: var(--done); }
+.down { color: var(--late); }
 
 /* ---------- messages ---------- */
 
 .error {
-  background: color-mix(in srgb, var(--danger) 12%, var(--surface));
-  border: 1px solid var(--danger);
-  color: var(--danger);
+  background: var(--late-soft);
+  color: var(--late);
+  border: 1px solid var(--late);
+  border-left-width: 3px;
   border-radius: var(--radius);
-  padding: 10px 12px;
-  font-size: 14px;
-  margin-bottom: 16px;
+  padding: 9px 13px;
+  margin-bottom: 14px;
+  font-size: 13px;
+  font-weight: 500;
 }
 
 .empty {
-  padding: 40px 16px;
+  padding: 34px 20px;
   text-align: center;
   color: var(--muted);
-  font-size: 14px;
+  font-size: 13px;
 }
 
-/* ---------- login ---------- */
+.hint,
+.footnote {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.footnote {
+  margin-top: 10px;
+}
+
+/* ---------- sign in ---------- */
 
 .login-wrap {
   min-height: 100vh;
   display: grid;
   place-items: center;
   padding: 24px;
+  background: var(--paper);
 }
 
+/*
+  The top rule is the whole decoration. A solid petrol edge on an otherwise
+  plain panel reads as a stamped form rather than a product landing page,
+  which is the right first impression for an operations console.
+*/
 .login-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 28px;
   width: 100%;
-  max-width: 380px;
+  max-width: 370px;
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-top: 3px solid var(--petrol);
+  border-radius: var(--radius);
+  padding: 26px 26px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
 }
 
 .login-card h1 {
-  font-size: 22px;
-  margin-bottom: 4px;
+  font-size: 20px;
+  margin: 0;
 }
 
-.login-card .tagline {
+.login-card .tagline,
+.login-card p {
   color: var(--muted);
   font-size: 13px;
-  margin: 0 0 22px;
+  margin: 0;
 }
 
+.login-card label,
 .field {
-  margin-bottom: 14px;
-}
-
-.hint {
-  margin-top: 18px;
-  padding-top: 16px;
-  border-top: 1px solid var(--border);
-  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
   color: var(--muted);
-  line-height: 1.7;
 }
 
-.hint code {
-  font-family: var(--mono);
-  background: var(--surface-2);
-  padding: 1px 5px;
-  border-radius: 4px;
+.login-card .btn {
+  margin-top: 4px;
+  padding: 9px 14px;
 }
-
-/* ---------- new order form ---------- */
 
 .form-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: 12px;
-  padding: 16px;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface-2);
-  align-items: end;
-}
-
-@media (max-width: 720px) {
-  .header-top { flex-wrap: wrap; }
-  .page { padding: 16px; }
-}
-
-/* ---------- insights ---------- */
-
-.stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.stat {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 14px 16px;
-}
-
-.stat-label {
-  font-size: 12px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.stat-value {
-  font-family: var(--mono);
-  font-size: 25px;
-  margin: 6px 0 2px;
-  font-variant-numeric: tabular-nums;
-}
-
-.stat-note { font-size: 12px; color: var(--muted); }
-
-/* Above the market is the good direction for a seller, below it the bad one.
-   Colour alone never carries the meaning -- every figure keeps its sign. */
-.up { color: var(--ok); }
-.down { color: var(--danger); }
-
-.chart { padding: 8px 4px 4px; }
-.chart svg { width: 100%; height: auto; display: block; }
-
-.chart-grid { stroke: var(--border); stroke-width: 1; }
-.chart-guide { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
-.chart-axis { fill: var(--muted); font-size: 11px; font-family: var(--mono); }
-
-.chart-line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
-.chart-mine { stroke: var(--accent); }
-/* Dashed as well as dimmer: the two series stay distinguishable in
-   greyscale, and for anyone who cannot separate them by colour. */
-.chart-market { stroke: var(--muted); stroke-dasharray: 5 4; }
-.chart-dot.chart-mine { fill: var(--accent); stroke: var(--surface); stroke-width: 2; }
-.chart-dot.chart-market { fill: var(--muted); stroke: var(--surface); stroke-width: 2; }
-
-.chart-legend {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 16px;
-  padding: 10px 12px 4px;
-  font-size: 13px;
-  color: var(--muted);
-}
-
-.chart-legend .swatch {
-  display: inline-block;
-  width: 14px;
-  height: 3px;
-  margin-right: 6px;
-  vertical-align: middle;
-  border-radius: 2px;
-}
-
-.swatch-mine { background: var(--accent); }
-.swatch-market {
-  background: repeating-linear-gradient(
-    to right, var(--muted) 0 5px, transparent 5px 9px
-  );
-}
-
-.chart-readout {
-  margin-left: auto;
-  font-family: var(--mono);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-}
-
-.footnote { font-size: 12px; margin: 14px 2px 0; max-width: 70ch; }
-
-@media (max-width: 720px) {
-  .chart-readout { margin-left: 0; }
 }
 
 /* ---------- inline row actions ---------- */
-/* Several small controls inside one table cell: a driver select, a date and
-   two buttons. Without a flex wrapper they stack, and the row grows to four
-   lines the moment anything is being edited. */
+
 .inline-form {
   display: inline-flex;
   gap: 6px;
@@ -486,50 +640,39 @@ tbody tr:hover {
 
 .inline-form select,
 .inline-form input {
-  padding: 4px 8px;
-  font-size: 13px;
+  padding: 3px 7px;
+  font-size: 12px;
   min-width: 0;
 }
 
 .inline-form select { max-width: 150px; }
-.inline-form input[type="date"] { width: 140px; }
-
-@media (max-width: 900px) {
-  .inline-form { flex-wrap: wrap; }
-}
-
-/* The actions column: as narrow as its buttons, and never wrapped onto a
-   second line. width:1% is the table idiom for "shrink to fit" -- the layout
-   algorithm gives a percentage this small the minimum the content allows. */
-.cell-actions {
-  width: 1%;
-  white-space: nowrap;
-  text-align: right;
-}
+.inline-form input[type="date"] { width: 142px; }
 
 /* ---------- the scheduling row ---------- */
-/* Its own row beneath the order, so opening the form never changes the width
-   of any column above it. */
 
 .sched-row td {
-  background: var(--surface-2);
-  padding: 12px 14px;
+  background: var(--panel-2);
+  border-left: 3px solid var(--petrol);
+  padding: 11px 13px;
 }
 
-.sched-form {
+.sched-form,
+.inline-panel {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
   gap: 12px;
 }
 
-.sched-form label {
+.sched-form label,
+.inline-panel label {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  font-size: 11px;
+  font-size: 10.5px;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.07em;
   color: var(--muted);
 }
 
@@ -546,28 +689,12 @@ tbody tr:hover {
   color: var(--muted);
 }
 
-/* ---------- inline panel: a form that opens inside a card ---------- */
-/* Used by the portal's order form and by the invite form. Wraps rather than
-   scrolls, because unlike a row-level form this one owns the full width. */
-
+/* A form that opens inside a panel. */
 .inline-panel {
-  display: flex;
-  flex-wrap: wrap;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--rule);
+  background: var(--panel-2);
   gap: 14px;
-  align-items: flex-end;
-  padding: 16px;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface-2);
-}
-
-.inline-panel label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--muted);
 }
 
 .inline-panel input,
@@ -582,9 +709,7 @@ tbody tr:hover {
   margin-left: auto;
 }
 
-/* ---------- a notice that has to be dismissed ---------- */
-/* For the invitation link: it is shown exactly once, so it must not fade on
-   its own while the dispatcher is looking somewhere else. */
+/* ---------- a notice that must be dismissed ---------- */
 
 .notice {
   display: flex;
@@ -592,18 +717,71 @@ tbody tr:hover {
   gap: 16px;
   align-items: center;
   justify-content: space-between;
-  background: var(--surface-2);
-  border: 1px solid var(--accent);
+  background: var(--panel);
+  border: 1px solid var(--petrol);
+  border-left-width: 3px;
   border-radius: var(--radius);
-  padding: 14px 16px;
-  margin-bottom: 16px;
+  padding: 13px 16px;
+  margin-bottom: 14px;
 }
 
 .invite-link {
   display: block;
-  margin-top: 8px;
-  font-family: var(--mono);
+  margin-top: 7px;
   font-size: 12px;
   word-break: break-all;
-  color: var(--accent);
+  color: var(--petrol);
+}
+
+/* ---------- the price chart ---------- */
+
+.chart {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.chart-grid { stroke: var(--rule); stroke-width: 1; }
+.chart-axis { fill: var(--muted); font-size: 10px; font-family: var(--mono); }
+.chart-guide { stroke: var(--rule-strong); stroke-dasharray: 3 3; }
+.chart-line { fill: none; stroke-width: 2; stroke-linejoin: round; }
+.chart-mine { stroke: var(--petrol); }
+.chart-market { stroke: var(--muted); stroke-dasharray: 5 4; }
+.chart-dot { fill: var(--petrol); }
+.chart-readout { fill: var(--ink); font-size: 11px; font-family: var(--mono); }
+
+.chart-legend {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+
+.swatch {
+  display: inline-block;
+  width: 16px;
+  height: 3px;
+  margin-right: 7px;
+  vertical-align: middle;
+}
+
+.swatch-mine { background: var(--petrol); }
+.swatch-market { background: var(--muted); }
+
+/* ---------- narrow screens ---------- */
+
+@media (max-width: 760px) {
+  .header-top { flex-wrap: wrap; }
+  .page { padding: 16px 14px 48px; }
+  .stats { grid-template-columns: 1fr 1fr; }
+  .inline-form { flex-wrap: wrap; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

@@ -11,7 +11,7 @@ import { useAuth } from "../auth";
  * the thing in view.
  */
 export default function PortalLayout() {
-  const { user, signOut } = useAuth();
+  const { user, signOut, reconnecting } = useAuth();
 
   return (
     <>
@@ -41,6 +41,12 @@ export default function PortalLayout() {
           <NavLink to="/portal/invoices">Invoices</NavLink>
         </nav>
       </header>
+
+      {reconnecting && (
+        <div className="reconnecting" role="status">
+          Reconnecting to the server — your session is still valid.
+        </div>
+      )}
 
       <main className="page">
         <Outlet />

@@ -3,7 +3,28 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0c5c63" />
     <title>DispatchLedger</title>
+
+    <!--
+      Archivo for the interface and IBM Plex Mono for figures.
+
+      Archivo is a grotesque drawn for signage and forms, which is what this
+      is: a board people read at a glance across a desk. Plex Mono carries
+      every number, because gallons and dollars stacked in a column have to
+      align on the digit, and a proportional face will not do that however
+      carefully the cells are padded.
+
+      display=swap so a slow font never holds up the first paint -- this runs
+      on an instance that sleeps, and the first request after a quiet spell is
+      already the slow one.
+    -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
   </head>
   <body>
     <div id="root"></div>

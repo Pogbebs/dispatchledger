@@ -2,7 +2,7 @@ import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../auth";
 
 export default function Layout() {
-  const { user, signOut } = useAuth();
+  const { user, signOut, reconnecting } = useAuth();
 
   return (
     <>
@@ -38,6 +38,12 @@ export default function Layout() {
           <NavLink to="/insights">Insights</NavLink>
         </nav>
       </header>
+
+      {reconnecting && (
+        <div className="reconnecting" role="status">
+          Reconnecting to the server — your session is still valid.
+        </div>
+      )}
 
       <main className="page">
         <Outlet />

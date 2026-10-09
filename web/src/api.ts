@@ -34,14 +34,28 @@ export function setToken(token: string | null) {
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = getToken();
-  const response = await fetch(`${BASE}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...init.headers,
-    },
-  });
+
+  let response: Response;
+  try {
+    response = await fetch(`${BASE}${path}`, {
+      ...init,
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...init.headers,
+      },
+    });
+  } catch {
+    // fetch rejects for a dropped connection, DNS failure, or a host that
+    // never answers -- none of which say anything about the caller's session.
+    // Raised as an ApiError with status 0 so every caller can tell "could not
+    // ask" apart from "asked and was refused". Treating the two alike is how
+    // a sleeping server used to log people out.
+    throw new ApiError(
+      "Cannot reach the server. It may be waking up — try again in a moment.",
+      0,
+    );
+  }
 
   if (response.status === 401) {
     setToken(null);
